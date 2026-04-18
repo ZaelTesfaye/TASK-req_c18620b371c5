@@ -1,0 +1,178 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fieldops_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: fieldops_root_pass
+      MYSQL_DATABASE: fieldops
+      MYSQL_USER: fieldops_user
+      MYSQL_PASSWORD: fieldops_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/migrations/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./backend/database/seeds/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
+    # Targets the mysql:8.0 image pinned above. --default-authentication-plugin
+    # is valid on MySQL 8.0 and is needed so PHP's default mysqli/PDO drivers
+    # (which still expect mysql_native_password) can authenticate without a
+    # manual ALTER USER. NOTE: mysql_native_password was REMOVED in MySQL 8.4 —
+    # if the image tag is bumped to 8.4+, replace this with
+    # `--mysql-native-password=ON` (if supported) or drop the flag entirely
+    # and switch backend credentials to caching_sha2_password.
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pfieldops_root_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fieldops_backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: FieldOps Service Suite
+      # This compose file is a LOCAL DEVELOPMENT artifact — it ships
+      # hardcoded DB credentials and a well-known dev ENCRYPTION_KEY
+      # below. APP_ENV=development reflects that reality. Real deployments
+      # must run APP_ENV=production against a deploy-time secret manager
+      # (k8s Secret, Vault, etc.), not this file. See README →
+      # "Encryption key provisioning" for the production checklist.
+      APP_ENV: development
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8000
+      API_PREFIX: /api/v1
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: fieldops
+      DB_USER: fieldops_user
+      DB_PASSWORD: fieldops_pass
+      SESSION_TTL_MINUTES: "480"
+      LOCKOUT_MAX_ATTEMPTS: "5"
+      LOCKOUT_DURATION_MINUTES: "15"
+      PASSWORD_MIN_LENGTH: "12"
+      DEFAULT_TAX_RATE: "0.08"
+      AUDIT_LOG_RETENTION_YEARS: "7"
+      DISCREPANCY_THRESHOLD_USD: "1.00"
+      DEFAULT_TIME_BUCKET_MINUTES: "1"
+      LATE_ARRIVAL_TOLERANCE_MINUTES: "5"
+      ENCRYPTION_ACTIVE_KEY_VERSION: "1"
+      ENCRYPTION_KEYS_FILE_PATH: /app/storage/keys/encryption.key
+      # !!! DEVELOPMENT PLACEHOLDER — NEVER USE IN PRODUCTION !!!
+      # This value is public, deterministic, and visible in version
+      # control. It lets `docker-compose up` succeed on a fresh checkout
+      # without any manual key provisioning. It is NOT a secret.
+      # BEFORE any non-local deployment:
+      #   (a) Generate a fresh 32-byte random key (see README).
+      #   (b) Inject it through a real secret manager (k8s Secret,
+      #       Vault, SOPS, etc.) — never inline in a committed file.
+      #   (c) OR remove this line entirely and mount an
+      #       ENCRYPTION_KEYS_FILE_PATH key file instead.
+      # Running with this value against real data would leak every
+      # field-level-encrypted row to anyone with the repo.
+      ENCRYPTION_KEY: '{"1":"ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzItYnl0ZXNfXw=="}'
+      CSV_EXPORT_ENCODING: UTF-8
+      ENABLE_EXPERIMENTS: "true"
+      ENABLE_TLS: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - backend_storage:/app/storage
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the JS bundle at build time. Relative path so nginx
+        # reverse-proxies `/api/` to the backend container — override here
+        # if the frontend ever serves a non-proxied absolute URL.
+        API_BASE_URL: /api/v1
+    container_name: fieldops_frontend
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: /api/v1
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  test-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.test
+    container_name: fieldops_test_backend
+    environment:
+      APP_NAME: FieldOps Service Suite
+      APP_ENV: testing
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      API_PREFIX: /api/v1
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_NAME: fieldops
+      DB_USER: fieldops_user
+      DB_PASSWORD: fieldops_pass
+      SESSION_TTL_MINUTES: "480"
+      LOCKOUT_MAX_ATTEMPTS: "5"
+      LOCKOUT_DURATION_MINUTES: "15"
+      PASSWORD_MIN_LENGTH: "12"
+      DEFAULT_TAX_RATE: "0.08"
+      AUDIT_LOG_RETENTION_YEARS: "7"
+      DISCREPANCY_THRESHOLD_USD: "1.00"
+      DEFAULT_TIME_BUCKET_MINUTES: "1"
+      LATE_ARRIVAL_TOLERANCE_MINUTES: "5"
+      ENCRYPTION_ACTIVE_KEY_VERSION: "1"
+      ENCRYPTION_KEYS_FILE_PATH: /app/storage/keys/encryption.key
+      ENCRYPTION_KEY: '{"1":"ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzItYnl0ZXNfXw=="}'
+      CSV_EXPORT_ENCODING: UTF-8
+      ENABLE_EXPERIMENTS: "true"
+      ENABLE_TLS: "false"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    profiles:
+      - test
+
+  test-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+    container_name: fieldops_test_frontend
+    environment:
+      API_BASE_URL: http://backend:8000/api/v1
+    profiles:
+      - test
+
+  test-e2e:
+    build:
+      context: .
+      dockerfile: tests/e2e/Dockerfile
+    container_name: fieldops_test_e2e
+    environment:
+      BACKEND_URL: http://backend:8000
+      API_BASE_URL: http://backend:8000/api/v1
+      FRONTEND_URL: http://frontend:80
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_started
+      frontend:
+        condition: service_started
+    profiles:
+      - e2e
+
+volumes:
+  mysql_data:
+  backend_storage:

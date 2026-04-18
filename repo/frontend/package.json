@@ -1,0 +1,59 @@
+{
+  "name": "fieldops-frontend",
+  "version": "1.0.0",
+  "description": "FieldOps Service & Environmental Analytics Suite - Layui Frontend",
+  "scripts": {
+    "dev": "webpack serve --mode development --open",
+    "build": "webpack --mode production",
+    "test": "jest --coverage --verbose",
+    "test:unit": "jest --testPathPattern=tests/unit --coverage --verbose",
+    "test:component": "jest --testPathPattern=tests/component --coverage --verbose",
+    "test:integration": "jest --testPathPattern=tests/integration --coverage --verbose",
+    "test:e2e": "jest --testPathPattern=tests/e2e --coverage --verbose",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "layui": "^2.9.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-loader": "^9.1.0",
+    "css-loader": "^6.8.0",
+    "html-webpack-plugin": "^5.5.0",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "@testing-library/jest-dom": "^6.1.0",
+    "mini-css-extract-plugin": "^2.7.0",
+    "style-loader": "^3.3.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.0",
+    "webpack-dev-server": "^4.15.0",
+    "copy-webpack-plugin": "^11.0.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "roots": [
+      "<rootDir>/tests"
+    ],
+    "moduleNameMapper": {
+      "\\.(css|less)$": "<rootDir>/tests/__mocks__/styleMock.js",
+      "^@/(.*)$": "<rootDir>/src/$1"
+    },
+    "setupFilesAfterSetup": [
+      "@testing-library/jest-dom"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/vendor/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 90,
+        "functions": 90,
+        "lines": 90,
+        "statements": 90
+      }
+    }
+  }
+}

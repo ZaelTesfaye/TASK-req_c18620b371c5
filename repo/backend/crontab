@@ -1,0 +1,8 @@
+# FieldOps backend scheduled jobs.
+#
+# Installed inside the backend container; the schedule is the single source
+# of truth expressed declaratively in config/schedule.php. When editing, keep
+# both files in sync.
+#
+# Weekly audit-log retention check — Sunday 03:00 UTC.
+0 3 * * 0 cd /app && /usr/local/bin/php think audit:archive >> /proc/1/fd/1 2>&1
