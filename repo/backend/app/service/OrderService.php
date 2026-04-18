@@ -570,8 +570,14 @@ class OrderService
 
     public static function roundHalfUp(float $value, int $precision): float
     {
-        $multiplier = pow(10, $precision);
-        return ceil($value * $multiplier - 0.5) / $multiplier;
+        // The previous `ceil($v * $m - 0.5) / $m` trick was not true half-up
+        // rounding: on exact half values it landed BELOW the intended result
+        // (e.g. 10.535 → 10.53 instead of 10.54) because `ceil(X - 0.5)`
+        // only rounds up when the fractional part is strictly greater than
+        // 0.5. PHP's round() with PHP_ROUND_HALF_UP handles the floating
+        // point precision dance internally and is the canonical HALF_UP
+        // implementation.
+        return round($value, $precision, PHP_ROUND_HALF_UP);
     }
 
     public static function getPaidAmount(int $orderId): float

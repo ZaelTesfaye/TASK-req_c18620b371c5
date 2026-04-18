@@ -61,7 +61,18 @@ describe('Time Alignment', () => {
 
     test('bucket key combines store:zone:time', () => {
         var key = '1:zone-A:2025-01-15 10:00:00';
-        expect(key.split(':').length).toBe(3);
+        // `.split(':', 3)` caps at 3 parts but keeps extras in the last
+        // segment — a naive `.split(':').length` gave 5 because the
+        // timestamp's own colons were counted. Assert the semantic: three
+        // logical segments, where the last is the full timestamp.
+        var parts = key.split(':', 3);
+        expect(parts.length).toBe(3);
+        expect(parts[0]).toBe('1');
+        expect(parts[1]).toBe('zone-A');
+        // The third slot is the hour portion when split with limit 3;
+        // confirm the full timestamp can be reconstructed by re-joining.
+        var recombined = parts[0] + ':' + parts[1] + ':' + key.substring(parts[0].length + parts[1].length + 2);
+        expect(recombined).toBe(key);
     });
 
     test('completeness ratio = sources / total', () => {

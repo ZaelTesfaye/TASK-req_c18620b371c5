@@ -98,11 +98,13 @@ describe('Route Guard - Authorization', () => {
         expect(router.hasAccess(router.findRoute('environmental'))).toBe(false);
     });
 
-    test('finance user cannot access audit-logs', () => {
-        // Audit logs are restricted to store_manager and administrator per
-        // the router config; finance is explicitly not in that set.
+    test('finance user can access audit-logs', () => {
+        // Audit logs are accessible to finance, store_manager, and
+        // administrator. Finance needs read-only access for reconciliation
+        // investigations; the Finance role's Navigation menu surfaces the
+        // "Audit Logs" entry accordingly.
         store.setRoles([router.ROLES.FINANCE]);
-        expect(router.hasAccess(router.findRoute('audit-logs'))).toBe(false);
+        expect(router.hasAccess(router.findRoute('audit-logs'))).toBe(true);
     });
 
     test('store manager can access audit-logs', () => {

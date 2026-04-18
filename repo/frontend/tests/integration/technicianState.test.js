@@ -42,8 +42,14 @@ describe('Technician Queue - Job State Transitions in DOM', () => {
     test('render shows both assigned and in_progress jobs', () => {
         var container = document.getElementById('container');
         techQueue.render(container);
-        // The queue renders content after async fetch; for sync test, check initial structure
-        expect(container.innerHTML).toContain('technician');
+        // The real queue list populates asynchronously from a fetch; this
+        // sync test can only assert the initial scaffold that render()
+        // builds before the fetch resolves. The presence of the refresh
+        // control + the tech-queue-list mount point proves the page was
+        // rendered (previously this asserted the string 'technician'
+        // which only appears after async data arrives).
+        expect(container.querySelector('#tech-queue-refresh-btn')).not.toBeNull();
+        expect(container.querySelector('#tech-queue-list')).not.toBeNull();
     });
 
     test('in_progress job state renders completion controls', () => {

@@ -10,6 +10,7 @@ var ROLES = router.ROLES;
 var MENU_CONFIG = {};
 
 MENU_CONFIG[ROLES.CUSTOMER] = [
+  { label: 'Dashboard',   route: 'dashboard',    icon: 'layui-icon-home' },
   { label: 'My Orders',   route: 'orders',       icon: 'layui-icon-form' },
   { label: 'Kiosk',       route: 'kiosk',        icon: 'layui-icon-screen-full' },
 ];
@@ -17,6 +18,7 @@ MENU_CONFIG[ROLES.CUSTOMER] = [
 MENU_CONFIG[ROLES.FRONT_DESK] = [
   { label: 'Orders',      route: 'orders',       icon: 'layui-icon-form' },
   { label: 'Kiosk',       route: 'kiosk',        icon: 'layui-icon-screen-full' },
+  { label: 'Cleansing',   route: 'cleansing',    icon: 'layui-icon-refresh-3' },
 ];
 
 MENU_CONFIG[ROLES.TECHNICIAN] = [
@@ -35,6 +37,7 @@ MENU_CONFIG[ROLES.STORE_MANAGER] = [
 
 MENU_CONFIG[ROLES.FINANCE] = [
   { label: 'Finance',     route: 'finance',      icon: 'layui-icon-dollar' },
+  { label: 'Audit Logs',  route: 'audit-logs',   icon: 'layui-icon-log' },
 ];
 
 MENU_CONFIG[ROLES.ADMINISTRATOR] = [

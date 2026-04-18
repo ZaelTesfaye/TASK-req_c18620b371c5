@@ -261,15 +261,28 @@ class CleansingService
     private static function normalizeJobTitle(string $title): string
     {
         $title = trim(mb_strtolower($title));
-        // Merge similar roles
-        $mergeMap = [
-            'sr.' => 'senior', 'sr ' => 'senior ', 'jr.' => 'junior', 'jr ' => 'junior ',
-            'dev' => 'developer', 'eng' => 'engineer', 'mgr' => 'manager', 'admin' => 'administrator',
-            'swe' => 'software engineer', 'sde' => 'software development engineer',
+        // Merge similar roles. Use word boundaries so abbreviations don't
+        // re-match inside already-expanded words — previously
+        // `'eng' => 'engineer'` via str_replace rewrote "engineer" itself
+        // into "engineerineer" because the `eng` prefix still matched.
+        // Order matters: match "sr"/"jr"/etc. at a word boundary, THEN
+        // consume any trailing period so "Sr. Developer" becomes
+        // "Senior Developer" — not "Senior. Developer". The pattern
+        // `\bXX\.?\b` fails on "XX." because `.` and space are both
+        // non-word characters (no word boundary between them), so the
+        // whole match bails and the period survives the rewrite. Using
+        // `\bXX\b\.?` forces `\b` before the optional period instead.
+        $patterns = [
+            '/\bsr\b\.?/i'     => 'senior',
+            '/\bjr\b\.?/i'     => 'junior',
+            '/\bswe\b/i'       => 'software engineer',
+            '/\bsde\b/i'       => 'software development engineer',
+            '/\bdev\b/i'       => 'developer',
+            '/\beng\b/i'       => 'engineer',
+            '/\bmgr\b/i'       => 'manager',
+            '/\badmin\b/i'     => 'administrator',
         ];
-        foreach ($mergeMap as $abbr => $full) {
-            $title = str_replace($abbr, $full, $title);
-        }
+        $title = preg_replace(array_keys($patterns), array_values($patterns), $title);
         return ucwords(trim(preg_replace('/\s+/', ' ', $title)));
     }
 
@@ -313,11 +326,17 @@ class CleansingService
     private static function normalizeExperience(string $exp): string
     {
         $exp = trim(mb_strtolower($exp));
-        if (preg_match('/(\d+)\s*\+?\s*(?:years?|yrs?)/i', $exp, $m)) {
-            return $m[1] . '+ years';
-        }
+        // Ranges must be checked BEFORE the plain-plus pattern — otherwise
+        // "3-5 years" matches "(\d+)...years" on the 5-part first and
+        // collapses to "5+ years", silently losing the lower bound.
         if (preg_match('/(\d+)\s*-\s*(\d+)\s*(?:years?|yrs?)/i', $exp, $m)) {
             return $m[1] . '-' . $m[2] . ' years';
+        }
+        if (preg_match('/(\d+)\s*\+\s*(?:years?|yrs?)/i', $exp, $m)) {
+            return $m[1] . '+ years';
+        }
+        if (preg_match('/(\d+)\s*(?:years?|yrs?)/i', $exp, $m)) {
+            return $m[1] . '+ years';
         }
         return $exp;
     }

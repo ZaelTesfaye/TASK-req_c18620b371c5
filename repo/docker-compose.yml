@@ -28,10 +28,17 @@ services:
     # and switch backend credentials to caching_sha2_password.
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pfieldops_root_pass"]
-      interval: 10s
+      # Ping over TCP (-h 127.0.0.1 with --protocol=TCP) rather than a
+      # local UNIX socket, so "healthy" genuinely means "accepting
+      # external TCP connections from peer containers". The default
+      # socket-based ping went green while 3306 was still refusing TCP,
+      # causing every other service to hit "Connection refused" on its
+      # first query.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=TCP", "-u", "root", "-pfieldops_root_pass"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 20
+      start_period: 30s
 
   backend:
     build:

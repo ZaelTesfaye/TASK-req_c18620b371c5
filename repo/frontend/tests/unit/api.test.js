@@ -3,6 +3,14 @@
  * Tests HTTP client with fetch mocking, auth header injection, deduplication, error normalization.
  */
 
+// The api module reads process.env.API_BASE_URL at require time to set
+// BASE_URL. Inside the test-frontend container, docker-compose sets this
+// to an absolute URL for integration flows, which would make unit tests
+// that assert the default `/api/v1` fail. Clear it before the require so
+// this unit test sees the default-path behavior regardless of how it is
+// invoked (host, Docker, CI).
+delete process.env.API_BASE_URL;
+
 // Mock localStorage before requiring store
 const localStorageMock = (function() {
     let store = {};

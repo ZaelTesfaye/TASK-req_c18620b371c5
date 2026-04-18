@@ -33,7 +33,11 @@ describe('Front Desk Order Flow', () => {
             { qty: 2, unit_price: 15.00 },
         ];
         const subtotal = items.reduce((sum, item) => sum + item.qty * item.unit_price, 0);
-        expect(subtotal).toBe(79.99);
+        // Use toBeCloseTo because the reduce accumulates IEEE-754 rounding
+        // error (49.99 + 30 in binary floating point is 79.99000000000001).
+        // The backend rounds through OrderService::roundHalfUp, so callers
+        // only care about the value to 2-decimal precision.
+        expect(subtotal).toBeCloseTo(79.99, 2);
     });
 
     test('pricing chain renders via shipped AmountBreakdown', () => {

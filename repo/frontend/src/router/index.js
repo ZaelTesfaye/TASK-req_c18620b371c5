@@ -46,7 +46,7 @@ var routes = [
   { path: 'admin',            page: 'admin',            auth: true,  roles: [ROLES.ADMINISTRATOR] },
   { path: 'environmental',    page: 'environmental',    auth: true,  roles: [ROLES.STORE_MANAGER, ROLES.ADMINISTRATOR] },
   { path: 'cleansing',        page: 'cleansing',        auth: true,  roles: [ROLES.STORE_MANAGER, ROLES.ADMINISTRATOR] },
-  { path: 'audit-logs',       page: 'audit-logs',       auth: true,  roles: [ROLES.STORE_MANAGER, ROLES.ADMINISTRATOR] },
+  { path: 'audit-logs',       page: 'audit-logs',       auth: true,  roles: [ROLES.STORE_MANAGER, ROLES.FINANCE, ROLES.ADMINISTRATOR] },
   { path: 'kiosk',            page: 'kiosk',            auth: true,  roles: [ROLES.CUSTOMER, ROLES.FRONT_DESK, ROLES.ADMINISTRATOR] },
 ];
 

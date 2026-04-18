@@ -23,8 +23,12 @@ COPY . .
 RUN mkdir -p storage/keys storage/logs runtime \
     && chmod -R 777 storage runtime
 
-# Start PHP built-in server in background, then run PHPUnit
-CMD bash -c "\
-    php -S 0.0.0.0:8000 -t public/ > /dev/null 2>&1 & \
-    sleep 2 && \
-    vendor/bin/phpunit --configuration phpunit.xml --testdox"
+# Ensure the test runner is executable inside the image (Windows hosts
+# often drop the exec bit during COPY).
+RUN chmod +x scripts/run-phpunit.sh
+
+# Delegate to a dedicated script so the CMD stays simple AND all relevant
+# logs (PHP server, PHP error_log, storage/logs, runtime/**/log) are
+# dumped after phpunit finishes. Any 500 will now have the actual
+# exception attached to the compose output.
+CMD ["bash", "scripts/run-phpunit.sh"]
