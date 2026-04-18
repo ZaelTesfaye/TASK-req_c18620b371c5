@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mysql:
     image: mysql:8.0
@@ -11,7 +9,12 @@ services:
       MYSQL_USER: fieldops_user
       MYSQL_PASSWORD: fieldops_pass
     ports:
-      - "3306:3306"
+      # Host port is overridable via MYSQL_HOST_PORT. Defaults to 3307 (not
+      # 3306) so `docker compose up` works even when a local MySQL/MariaDB
+      # Windows service or another Docker container is already bound to
+      # 3306 on the host. In-cluster traffic (backend → mysql) uses the
+      # service name `mysql` on port 3306 regardless of this mapping.
+      - "${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./backend/database/migrations/init.sql:/docker-entrypoint-initdb.d/01_init.sql
@@ -83,7 +86,13 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app
+      # Persist writable state only. Do NOT bind-mount ./backend over /app:
+      # the image's `composer install` produces /app/vendor, and a host
+      # bind mount would replace /app with the host directory (which has
+      # no vendor/), causing `require /app/vendor/autoload.php` to fail on
+      # every restart. To iterate on PHP source live, rebuild with
+      # `docker compose up --build` (or add a dev-profile override that
+      # bind-mounts individual source dirs but leaves /app/vendor alone).
       - backend_storage:/app/storage
     depends_on:
       mysql:

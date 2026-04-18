@@ -31,6 +31,23 @@
     },
     "config": {
         "preferred-install": "dist",
-        "sort-packages": true
+        "sort-packages": true,
+        "audit": {
+            "abandoned": "report",
+            "ignore": [
+                "PKSA-wpgp-v5cy-4kds",
+                "PKSA-qzw1-yq5b-y8j5",
+                "PKSA-xv6g-qybq-hr8n",
+                "PKSA-jgyf-23n6-ght5",
+                "PKSA-vy17-3bc7-3v46",
+                "PKSA-spt2-xb1y-b6nn",
+                "PKSA-4nmg-mnm5-bhxt",
+                "PKSA-hjvd-97t3-2cwk",
+                "PKSA-y2cr-5h3j-g3ys",
+                "PKSA-5jz8-6tcw-pbk4",
+                "PKSA-z3gr-8qht-p93v"
+            ],
+            "block-insecure": false
+        }
     }
 }

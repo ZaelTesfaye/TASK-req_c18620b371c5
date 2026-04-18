@@ -30,6 +30,10 @@ RUN install -m 0644 crontab /etc/cron.d/fieldops \
 
 EXPOSE 8000
 
-# Run cron in the background, then the API server in the foreground so
-# "docker stop" still cleanly terminates the container.
-CMD ["sh", "-c", "cron && php think run --host 0.0.0.0 --port 8000"]
+# Start cron in the background for scheduled jobs, then `exec` into the API
+# server so SIGTERM/SIGINT reach PHP directly and `docker stop` terminates
+# cleanly. The startup banner makes it obvious in `docker compose up` logs
+# that the container reached the serving stage — previously the container
+# could sit silent during MySQL readiness waits with no indication that
+# anything was running.
+CMD ["sh", "-c", "cron || echo 'cron failed to start (non-fatal)'; echo '[backend] starting PHP server on 0.0.0.0:8000'; exec php think run --host 0.0.0.0 --port 8000"]

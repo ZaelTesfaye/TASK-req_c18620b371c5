@@ -23,11 +23,13 @@ This single command builds and starts all services. The database is auto-initial
 
 ## Service Ports
 
-| Service | Port | Description |
-|---------|------|-------------|
-| MySQL | 3306 | Database server |
-| Backend | 8000 | ThinkPHP REST API |
-| Frontend | 3000 | Layui web application (Nginx) |
+| Service | Host port | Container port | Description |
+|---------|-----------|----------------|-------------|
+| MySQL | `3307` (default, override via `MYSQL_HOST_PORT`) | `3306` | Database server. Host port intentionally differs from 3306 so a local MySQL/MariaDB service on Windows/macOS does not conflict with `docker compose up`. Backend and frontend containers reach MySQL internally via `mysql:3306`. |
+| Backend | `8000` | `8000` | ThinkPHP REST API |
+| Frontend | `3000` | `80` | Layui web application (Nginx) |
+
+To connect from the host with a GUI client, point it at `localhost:3307` with credentials from the compose file. To pin a different host port for one run: `MYSQL_HOST_PORT=3310 docker compose up`.
 
 ## Configuration
 
