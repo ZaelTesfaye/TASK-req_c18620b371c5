@@ -48,8 +48,12 @@ echo ""
 # Ensure MySQL is running AND accepting TCP connections. The health
 # condition is now TCP-based (see docker-compose.yml mysql healthcheck),
 # so `up --wait` returns only once peer containers can actually connect.
+# --wait-timeout=180 because on a freshly-reset volume MySQL has to run
+# init.sql + seed.sql before it accepts TCP, which routinely takes 40-60s
+# on Windows Docker (the default --wait-timeout of 60s then kills the
+# whole script with set -e before any test runs).
 echo "[2/5] Starting database service..."
-docker-compose -f "$COMPOSE_FILE" up -d --wait mysql
+docker-compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 mysql
 echo "MySQL is ready (TCP 3306 reachable)."
 echo ""
 
@@ -98,6 +102,16 @@ until curl -sf http://localhost:8000/api/v1/auth/me > /dev/null 2>&1 || [ $? -eq
     sleep 2
 done
 echo "Backend is ready."
+
+# Regenerate demo-user password hashes inside the backend container so
+# fullstack.test.js's loginAs('admin') actually authenticates. Same
+# reason as in run-phpunit.sh: seed.sql ships a placeholder bcrypt hash
+# that does not correspond to "Demo12345678!", so without this every
+# E2E login returns INVALID_CREDENTIALS and after 5 attempts the demo
+# users lock themselves out.
+echo "[5/5] Reseeding demo password hashes..."
+docker-compose -f "$COMPOSE_FILE" exec -T backend php scripts/seed-passwords.php \
+    || echo "(could not reseed demo passwords — E2E login tests will likely fail)"
 echo ""
 
 echo "Running fullstack E2E tests..."

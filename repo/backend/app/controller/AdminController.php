@@ -34,10 +34,14 @@ class AdminController
             return json($resp['data'], $resp['code']);
         }
 
-        // Validate password policy
+        // Validate password policy. Return WEAK_PASSWORD (not the generic
+        // VALIDATION_ERROR) so clients can distinguish "policy failure"
+        // from "missing field" — the test suite asserts this specific
+        // error_code, and the distinction also matters to the admin UI
+        // which surfaces a policy hint only on WEAK_PASSWORD.
         $validation = AuthService::validatePasswordPolicy($data['password']);
         if (!$validation['valid']) {
-            $resp = ResponseHelper::validationError($validation['message']);
+            $resp = ResponseHelper::error('WEAK_PASSWORD', $validation['message'], 400);
             return json($resp['data'], $resp['code']);
         }
 

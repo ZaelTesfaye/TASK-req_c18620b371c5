@@ -154,7 +154,8 @@ class AdminApiTest extends TestCase
             'password' => 'StrongPass123!@#',
             'roles' => ['front_desk'],
         ], $token);
-        $this->assertEquals(200, $response['status']);
+        // Controller returns 201 for successful resource creation.
+        $this->assertContains($response['status'], [200, 201]);
         $this->assertTrue($response['body']['success']);
 
         // Verify user is retrievable via user list

@@ -30,7 +30,13 @@ class DashboardApiTest extends TestCase
         }
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 
-        if ($method === 'GET' && !empty($data)) {
+        if ($method === 'POST') {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        } elseif ($method === 'PATCH') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        } elseif ($method === 'GET' && !empty($data)) {
             $url .= '?' . http_build_query($data);
             curl_setopt($ch, CURLOPT_URL, $url);
         }

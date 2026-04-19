@@ -35,13 +35,23 @@ for i in $(seq 1 60); do
     sleep 1
 done
 
+# Regenerate demo-user password hashes against the real test password
+# and clear lockout state. The seed.sql hash is a PHP-docs placeholder
+# (hashes "rasmuslerdorf", not "Demo12345678!"), so without this every
+# test's loginAs() fails password_verify and, after five attempts,
+# locks each demo account out — cascading every downstream assertion.
+php scripts/seed-passwords.php || {
+    echo "[run-phpunit] FATAL: could not reset demo password hashes."
+    exit 3
+}
+
 # Start the PHP built-in server with error logging turned on so uncaught
 # exceptions from AuthService / middleware land in $PHP_ERROR_LOG.
 php \
     -d log_errors=1 \
     -d "error_log=${PHP_ERROR_LOG}" \
     -d display_errors=stderr \
-    -S 0.0.0.0:8000 -t public/ \
+    -S 0.0.0.0:8000 -t public/ public/router.php \
     > "${PHP_SERVER_LOG}" 2>&1 &
 SERVER_PID=$!
 

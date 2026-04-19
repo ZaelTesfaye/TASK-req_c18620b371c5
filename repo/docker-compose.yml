@@ -26,7 +26,13 @@ services:
     # if the image tag is bumped to 8.4+, replace this with
     # `--mysql-native-password=ON` (if supported) or drop the flag entirely
     # and switch backend credentials to caching_sha2_password.
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # innodb_buffer_pool_size=128M + performance_schema=OFF keeps MySQL's
+    # resident set under ~300MB on first boot. The default is ~1.5GB, which
+    # on Docker Desktop with a 4-8GB shared VM gets SIGKILL-ed (exit 137)
+    # mid-init when other dev stacks are running on the same daemon, and
+    # run_tests.sh then dies in the `up --wait` phase before any test runs.
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=128M --performance-schema=OFF --innodb-log-buffer-size=8M
+    mem_limit: 512m
     healthcheck:
       # Ping over TCP (-h 127.0.0.1 with --protocol=TCP) rather than a
       # local UNIX socket, so "healthy" genuinely means "accepting

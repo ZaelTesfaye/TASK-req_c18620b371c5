@@ -126,3 +126,16 @@ INSERT INTO `sensor_sources` (`store_id`, `zone_id`, `source_type`, `source_name
 (1, 1, 'sensor', 'Humidity Sensor A1', 1),
 (1, 2, 'sensor', 'Temperature Sensor B1', 1),
 (2, 3, 'csv', 'Monthly CSV Import', 1);
+
+-- ============================================================
+-- Cash Drawers (demo, per store)
+-- RbacApiTest and StoreIsolationTest both GET
+-- /finance/cash-drawer/daily?date=2025-01-01 and expect 200; without a row
+-- for that store+date the controller returns 404 NOT_FOUND and the test
+-- fails. Seeding an open drawer here gives those auth/isolation tests a
+-- deterministic target without forcing them to create their own drawer
+-- (which would couple them to the open-drawer endpoint's behaviour).
+-- ============================================================
+INSERT INTO `cash_drawer_daily` (`store_id`, `business_date`, `opened_by`, `open_amount`, `status`) VALUES
+(1, '2025-01-01', 5, 100.00, 'open'),
+(2, '2025-01-01', 5, 100.00, 'open');

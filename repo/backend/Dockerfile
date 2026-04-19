@@ -30,10 +30,14 @@ RUN install -m 0644 crontab /etc/cron.d/fieldops \
 
 EXPOSE 8000
 
-# Start cron in the background for scheduled jobs, then `exec` into the API
-# server so SIGTERM/SIGINT reach PHP directly and `docker stop` terminates
-# cleanly. The startup banner makes it obvious in `docker compose up` logs
-# that the container reached the serving stage — previously the container
-# could sit silent during MySQL readiness waits with no indication that
-# anything was running.
-CMD ["sh", "-c", "cron || echo 'cron failed to start (non-fatal)'; echo '[backend] starting PHP server on 0.0.0.0:8000'; exec php think run --host 0.0.0.0 --port 8000"]
+# Start cron for the audit-archival scheduler, then `exec` into PHP's
+# built-in server pointed at public/. We used to invoke `php think run`
+# here but it returns 200 HTML for EVERY path (including `/api/v1/...`),
+# which silently broke the E2E suite — test-e2e saw `res.body === null`
+# because the content-type wasn't JSON. The plain `php -S ... -t public/`
+# form is what test-backend uses, is what ThinkPHP's own `public/
+# index.php` is written for, and routes API paths through the
+# ExceptionHandler / RequestLogMiddleware chain so genuine 4xx/5xx come
+# back as proper JSON. Error logs go to /tmp/php-errors.log so they
+# survive beyond the request.
+CMD ["sh", "-c", "cron || echo 'cron failed to start (non-fatal)'; echo '[backend] starting PHP server on 0.0.0.0:8000'; exec php -d log_errors=1 -d error_log=/tmp/php-errors.log -S 0.0.0.0:8000 -t public/ public/router.php"]

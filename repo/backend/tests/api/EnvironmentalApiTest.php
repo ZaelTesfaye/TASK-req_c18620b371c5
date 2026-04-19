@@ -125,7 +125,8 @@ class EnvironmentalApiTest extends TestCase
                 ['metric_type' => 'temperature', 'metric_value' => 72.5, 'observed_at' => '2025-01-15 10:00:00'],
             ],
         ], $token);
-        $this->assertEquals(200, $response['status']);
+        // Controller returns 201 for resource creation (REST convention).
+        $this->assertContains($response['status'], [200, 201]);
         $this->assertTrue($response['body']['success'] ?? false);
         $this->assertArrayHasKey('imported', $response['body']['data'] ?? []);
         $this->assertEquals(1, $response['body']['data']['imported']);

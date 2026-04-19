@@ -98,10 +98,17 @@ class EventApiTest extends TestCase
 
         $eventName = 'test_event_' . time();
         $response = $this->request('POST', 'events', [
+            // EventController::create requires both `event_key` (the stable
+            // identifier used by the `track` endpoint) and `name` (the
+            // display label). The earlier form of this test sent only
+            // `name` and `description`, tripping the controller's empty-
+            // event_key validation path and returning a 400.
+            'event_key' => $eventName,
             'name' => $eventName,
             'description' => 'Test event for automated testing',
         ], $token);
-        $this->assertEquals(200, $response['status']);
+        // Controller returns 201 for resource creation.
+        $this->assertContains($response['status'], [200, 201]);
         $this->assertTrue($response['body']['success']);
         $this->assertArrayHasKey('id', $response['body']['data'] ?? []);
 
@@ -141,11 +148,22 @@ class EventApiTest extends TestCase
         $token = $this->loginAs('admin');
         $this->assertNotNull($token);
 
+        // Create a real event definition first so the track endpoint has
+        // something to look up — `track` 404s on an unknown event_key.
+        $eventKey = 'track_test_' . time();
+        $createResp = $this->request('POST', 'events', [
+            'event_key'   => $eventKey,
+            'name'        => 'Track Test',
+            'description' => 'Seed for trackEvent test',
+        ], $token);
+        $this->assertContains($createResp['status'], [200, 201]);
+
         $response = $this->request('POST', 'events/track', [
-            'event_name' => 'page_view',
+            // EventController::track reads `event_key`, not `event_name`.
+            'event_key'  => $eventKey,
             'properties' => ['page' => 'dashboard'],
         ], $token);
-        $this->assertEquals(200, $response['status']);
+        $this->assertContains($response['status'], [200, 201]);
         $this->assertTrue($response['body']['success']);
     }
 

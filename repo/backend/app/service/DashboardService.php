@@ -29,15 +29,22 @@ class DashboardService
             ->where('created_at', '<=', $toDt)
             ->count();
 
-        // Average fulfillment time (in minutes)
-        $avgFulfillment = Db::table('orders')
+        // Average fulfillment time (in minutes). ThinkPHP's ->avg() treats
+        // its argument as a column identifier and escapes it, so passing
+        // the raw SQL expression `TIMESTAMPDIFF(...)` produces a
+        // "not support data" error (see think-orm Mysql.php). Use
+        // ->fetchSql(false)->field(Db::raw(...)) pattern via a single
+        // scalar-returning query so the expression reaches MySQL unquoted.
+        $avgRow = Db::table('orders')
             ->where('store_id', $storeId)
             ->where('status', 'completed')
             ->whereNotNull('confirmed_at')
             ->whereNotNull('completed_at')
             ->where('completed_at', '>=', $fromDt)
             ->where('completed_at', '<=', $toDt)
-            ->avg('TIMESTAMPDIFF(MINUTE, confirmed_at, completed_at)');
+            ->fieldRaw('AVG(TIMESTAMPDIFF(MINUTE, confirmed_at, completed_at)) AS avg_minutes')
+            ->find();
+        $avgFulfillment = $avgRow['avg_minutes'] ?? null;
 
         // Cancellation rate
         $totalOrders = Db::table('orders')

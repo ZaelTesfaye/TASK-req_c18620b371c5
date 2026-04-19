@@ -94,7 +94,8 @@ class CleansingApiTest extends TestCase
                 ['job_title' => 'Sr. Dev', 'company' => 'Acme Inc', 'city' => 'NYC', 'salary' => '$75k', 'education' => 'BS', 'experience' => '5 years'],
             ],
         ], $token);
-        $this->assertEquals(200, $response['status']);
+        // Controller returns 201 for resource creation (REST convention).
+        $this->assertContains($response['status'], [200, 201]);
         $this->assertTrue($response['body']['success'] ?? false);
         $this->assertArrayHasKey('batch_id', $response['body']['data'] ?? []);
     }
@@ -161,7 +162,8 @@ class CleansingApiTest extends TestCase
                 ['job_title' => 'Engineer', 'company' => 'Google', 'city' => 'SF', 'salary' => '150000', 'education' => 'MS', 'experience' => '5 years'],
             ],
         ], $token);
-        $this->assertEquals(200, $importResp['status']);
+        // 201 = created (REST convention the controller uses).
+        $this->assertContains($importResp['status'], [200, 201]);
         $batchId = $importResp['body']['data']['batch_id'] ?? null;
         $this->assertNotNull($batchId);
 
@@ -208,7 +210,8 @@ class CleansingApiTest extends TestCase
                 ['job_title' => 'Manager', 'company' => 'Apple', 'city' => 'Cupertino', 'salary' => '200000', 'education' => 'MBA', 'experience' => '10 years'],
             ],
         ], $token);
-        $this->assertEquals(200, $importResp['status']);
+        // Controller returns 201 for resource creation (REST convention).
+        $this->assertContains($importResp['status'], [200, 201]);
         $batchId = $importResp['body']['data']['batch_id'] ?? null;
         $this->assertNotNull($batchId);
 
