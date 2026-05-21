@@ -16,11 +16,17 @@
  *   docker compose exec backend php scripts/reseed.php
  */
 
-$dbHost = getenv('DB_HOST') ?: 'mysql';
-$dbPort = getenv('DB_PORT') ?: '3306';
-$dbName = getenv('DB_NAME') ?: 'fieldops';
-$dbUser = getenv('DB_USER') ?: 'fieldops_user';
-$dbPass = getenv('DB_PASSWORD') ?: 'fieldops_pass';
+// Credentials come from the process env (compose env_file or operator
+// export) and/or /app/.env (provisioned from .env.example by the
+// Dockerfile). No hardcoded fallbacks - misconfiguration fails loud.
+require_once __DIR__ . '/load-env.php';
+loadEnvFile(dirname(__DIR__) . '/.env');
+
+$dbHost = requireEnv('DB_HOST');
+$dbPort = requireEnv('DB_PORT');
+$dbName = requireEnv('DB_NAME');
+$dbUser = requireEnv('DB_USER');
+$dbPass = requireEnv('DB_PASSWORD');
 
 $seedPath = dirname(__DIR__) . '/database/seeds/seed.sql';
 if (!is_file($seedPath)) {

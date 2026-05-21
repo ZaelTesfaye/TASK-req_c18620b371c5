@@ -22,11 +22,21 @@
  *   2  - SQL execution failed
  */
 
-$dbHost = getenv('DB_HOST') ?: 'mysql';
-$dbPort = getenv('DB_PORT') ?: '3306';
-$dbName = getenv('DB_NAME') ?: 'fieldops';
-$dbUser = getenv('DB_USER') ?: 'fieldops_user';
-$dbPass = getenv('DB_PASSWORD') ?: 'fieldops_pass';
+// Load /app/.env (provisioned by the Dockerfile from .env.example) so
+// the script runs identically with or without compose env_file. Vars
+// already set by the process env win — see load-env.php for the
+// precedence rules. Credentials must come from one of those sources;
+// the previous `?: 'fieldops_pass'` fallbacks have been removed so a
+// misconfigured deployment fails loud instead of silently trying a
+// committed dev password.
+require_once __DIR__ . '/load-env.php';
+loadEnvFile(dirname(__DIR__) . '/.env');
+
+$dbHost = requireEnv('DB_HOST');
+$dbPort = requireEnv('DB_PORT');
+$dbName = requireEnv('DB_NAME');
+$dbUser = requireEnv('DB_USER');
+$dbPass = requireEnv('DB_PASSWORD');
 
 $root = dirname(__DIR__);
 $initSql = $root . '/database/migrations/init.sql';
@@ -197,12 +207,35 @@ echo "[bootstrap-db] Applied {$seedCount} seed statements from seed.sql\n";
 
 // Regenerate demo password hashes against the canonical demo password
 // (seed.sql ships a placeholder bcrypt that hashes "rasmuslerdorf",
-// not "Demo12345678!"). Idempotent: safe to re-run on every boot.
-$hash = password_hash('Demo12345678!', PASSWORD_BCRYPT, ['cost' => 10]);
-$stmt = $pdo->prepare(
-    "UPDATE users SET password_hash = :h, failed_attempts = 0, lockout_until = NULL"
-);
-$stmt->execute([':h' => $hash]);
+// not the demo password). Idempotent: safe to re-run on every boot.
+// SEED_DEMO_PASSWORD ships in backend/.env.example so the value lives
+// in one place instead of being hardcoded both here and in
+// seed-passwords.php; tests still reference the literal demo password
+// directly, so changing SEED_DEMO_PASSWORD requires updating test
+// fixtures too.
+//
+// IMPORTANT: this step is best-effort, NOT load-bearing. A missing
+// SEED_DEMO_PASSWORD only affects whether the demo accounts can log
+// in - it must NEVER abort the whole bootstrap, because the backend
+// container's CMD wraps this script in `|| exit 1` and a non-zero
+// exit takes the backend offline. With the backend offline, the
+// login page's /auth/bootstrap/stores call 502s and the operator
+// sees the dropdown stuck on "Failed to load stores" even though
+// the DB is fully seeded. Stores loading must not be gated on
+// demo-user credential resets.
+$demoPassword = getenv('SEED_DEMO_PASSWORD');
+if (is_string($demoPassword) && $demoPassword !== '') {
+    $hash = password_hash($demoPassword, PASSWORD_BCRYPT, ['cost' => 10]);
+    $stmt = $pdo->prepare(
+        "UPDATE users SET password_hash = :h, failed_attempts = 0, lockout_until = NULL"
+    );
+    $stmt->execute([':h' => $hash]);
+} else {
+    fwrite(STDERR, "[bootstrap-db] WARN: SEED_DEMO_PASSWORD not set; "
+        . "skipping demo-user password reset. seed.sql's placeholder "
+        . "hash will remain, so demo logins will fail until "
+        . "scripts/seed-passwords.php runs with SEED_DEMO_PASSWORD set.\n");
+}
 
 $storeCount = (int) $pdo->query("SELECT COUNT(*) FROM stores")->fetchColumn();
 $wsCount    = (int) $pdo->query("SELECT COUNT(*) FROM workstations")->fetchColumn();

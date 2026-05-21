@@ -5,7 +5,54 @@
  *
  * All environment variables are consumed ONLY through this config module.
  * Application logic must NEVER access getenv() or $_ENV directly.
+ *
+ * Credential resolution for DB_USER and DB_PASSWORD:
+ *   - NO hardcoded fallback. The previous `?: 'fieldops_user'` /
+ *     `?: 'fieldops_pass'` defaults were removed so a misconfigured
+ *     deployment cannot silently substitute a committed dev password
+ *     for a real one.
+ *   - On a fresh `docker compose up`, env_file pulls both keys from
+ *     backend/.env.example before this file is evaluated. The
+ *     Dockerfile additionally copies .env.example to /app/.env at
+ *     build time, and loadEnvFile() below reads it - so even running
+ *     the image outside compose works.
+ *   - If both sources are absent the foreach guard below throws a
+ *     RuntimeException naming the missing key, instead of letting
+ *     an opaque "Access denied for user ''@'mysql'" surface three
+ *     frames deep inside PDO.
  */
+
+require_once __DIR__ . '/../scripts/load-env.php';
+// Defensive: also load /app/.env directly. ThinkPHP's framework path
+// already does this via \think\Env::load(), but config files can be
+// evaluated by tooling (artisan-style scripts, IDE inspectors) that
+// skips that bootstrap. loadEnvFile is a no-op when the file is
+// absent and never overrides values already in the process env.
+loadEnvFile(dirname(__DIR__) . '/.env');
+
+// DB credentials must be set explicitly - no committed fallback.
+// Throwing here (rather than letting them silently become empty
+// strings) means a misconfigured deployment surfaces as a clear
+// "DB_USER not set" message at framework boot instead of an opaque
+// "Access denied for user ''@'mysql'" three frames deep in PDO.
+// Both keys ship in backend/.env.example, so on a fresh `docker
+// compose up` env_file populates them before this file is evaluated.
+foreach (['DB_USER', 'DB_PASSWORD'] as $_required) {
+    $_v = getenv($_required);
+    if ($_v === false || $_v === '') {
+        throw new \RuntimeException(
+            "Required env var {$_required} is not set. " .
+            "Provision it via docker-compose env_file (loads " .
+            "backend/.env.example), via /app/.env (baked from " .
+            ".env.example by the Dockerfile), or via your secret " .
+            "manager. The previous hardcoded `'fieldops_pass'` " .
+            "fallback was removed deliberately - committed dev " .
+            "passwords must not silently substitute for production " .
+            "credentials."
+        );
+    }
+}
+unset($_required, $_v);
 
 return [
     // Application
@@ -18,12 +65,16 @@ return [
     // TLS Toggle
     'enable_tls'     => filter_var(getenv('ENABLE_TLS') ?: 'false', FILTER_VALIDATE_BOOLEAN),
 
-    // Database
+    // Database. Host/port/name keep operational defaults that match
+    // the committed compose topology; user/password do NOT have
+    // any fallback - the foreach above guarantees they are set,
+    // sourced cleanly from .env.example (via env_file or /app/.env)
+    // or from a real secret manager in production.
     'db_host'        => getenv('DB_HOST') ?: 'mysql',
     'db_port'        => intval(getenv('DB_PORT') ?: '3306'),
     'db_name'        => getenv('DB_NAME') ?: 'fieldops',
-    'db_user'        => getenv('DB_USER') ?: 'fieldops_user',
-    'db_password'    => getenv('DB_PASSWORD') ?: 'fieldops_pass',
+    'db_user'        => getenv('DB_USER'),
+    'db_password'    => getenv('DB_PASSWORD'),
 
     // Session
     'session_ttl_minutes' => intval(getenv('SESSION_TTL_MINUTES') ?: '480'),

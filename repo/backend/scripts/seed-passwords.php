@@ -19,13 +19,19 @@
  *   run_tests.sh                       — before E2E phase (via docker exec)
  */
 
-$dbHost = getenv('DB_HOST') ?: 'mysql';
-$dbPort = getenv('DB_PORT') ?: '3306';
-$dbName = getenv('DB_NAME') ?: 'fieldops';
-$dbUser = getenv('DB_USER') ?: 'fieldops_user';
-$dbPass = getenv('DB_PASSWORD') ?: 'fieldops_pass';
+// Credentials come from the process env (compose env_file or operator
+// export) and/or /app/.env (provisioned from .env.example by the
+// Dockerfile). No hardcoded fallbacks - misconfiguration fails loud.
+require_once __DIR__ . '/load-env.php';
+loadEnvFile(dirname(__DIR__) . '/.env');
 
-$testPassword = getenv('SEED_DEMO_PASSWORD') ?: 'Demo12345678!';
+$dbHost = requireEnv('DB_HOST');
+$dbPort = requireEnv('DB_PORT');
+$dbName = requireEnv('DB_NAME');
+$dbUser = requireEnv('DB_USER');
+$dbPass = requireEnv('DB_PASSWORD');
+
+$testPassword = requireEnv('SEED_DEMO_PASSWORD');
 
 try {
     $pdo = new PDO(
