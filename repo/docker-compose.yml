@@ -31,7 +31,16 @@ services:
     # on Docker Desktop with a 4-8GB shared VM gets SIGKILL-ed (exit 137)
     # mid-init when other dev stacks are running on the same daemon, and
     # run_tests.sh then dies in the `up --wait` phase before any test runs.
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=128M --performance-schema=OFF --innodb-log-buffer-size=8M
+    # log-bin-trust-function-creators=ON is REQUIRED. The MySQL 8 image
+    # enables binary logging by default, and with binlog on, CREATE
+    # TRIGGER / CREATE FUNCTION rejects any caller lacking the SUPER
+    # privilege (error 1419). `fieldops_user` is a plain app user — no
+    # SUPER — so init.sql's append-only triggers on operation_logs and
+    # security_events fail at bootstrap, the backend exits 1 in a crash
+    # loop, and nginx serves 502s for every API call. Trusting function
+    # creators is the documented MySQL workaround for single-master
+    # dev/demo setups where replication safety is not a concern.
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --innodb-buffer-pool-size=128M --performance-schema=OFF --innodb-log-buffer-size=8M --log-bin-trust-function-creators=ON
     mem_limit: 512m
     healthcheck:
       # Ping over TCP (-h 127.0.0.1 with --protocol=TCP) rather than a

@@ -156,7 +156,20 @@ $splitSql = function (string $sql): array {
     return $statements;
 };
 
-$applySqlFile = function (string $path) use ($pdo, $splitSql): int {
+/**
+ * Statement-class detection: trigger/function/procedure DDL is treated
+ * as best-effort, not load-bearing. Audit-log immutability triggers
+ * are a hardening layer; they're not required for login to work, and
+ * managed MySQL services (RDS, Cloud SQL) commonly forbid CREATE
+ * TRIGGER for non-admin users. Letting a SUPER-privilege error crash
+ * the whole bootstrap turned the deploy into a 502 loop. Now we warn
+ * and continue.
+ */
+$isOptionalDdl = function (string $stmt): bool {
+    return (bool) preg_match('/^\s*(CREATE|DROP)\s+(TRIGGER|FUNCTION|PROCEDURE)\b/i', $stmt);
+};
+
+$applySqlFile = function (string $path) use ($pdo, $splitSql, $isOptionalDdl): int {
     $statements = $splitSql(file_get_contents($path));
     $count = 0;
     foreach ($statements as $stmt) {
@@ -164,6 +177,10 @@ $applySqlFile = function (string $path) use ($pdo, $splitSql): int {
             $pdo->exec($stmt);
             $count++;
         } catch (Throwable $e) {
+            if ($isOptionalDdl($stmt)) {
+                fwrite(STDERR, "[bootstrap-db] WARN: optional DDL skipped in " . basename($path) . ": " . $e->getMessage() . "\n");
+                continue;
+            }
             fwrite(STDERR, "[bootstrap-db] Statement failed in " . basename($path) . ": " . $e->getMessage() . "\n");
             fwrite(STDERR, "[bootstrap-db] SQL (first 200 chars): " . substr($stmt, 0, 200) . "\n");
             exit(2);
