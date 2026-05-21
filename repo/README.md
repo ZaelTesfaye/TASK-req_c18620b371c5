@@ -29,7 +29,7 @@ This single command builds and starts all services. The database is auto-initial
 | Backend | `8000` | `8000` | ThinkPHP REST API |
 | Frontend | `3000` | `80` | Layui web application (Nginx) |
 
-To connect from the host with a GUI client, point it at `localhost:3307` with credentials from the compose file. To pin a different host port for one run: `MYSQL_HOST_PORT=3310 docker compose up`.
+To connect from the host with a GUI client, point it at `localhost:3307` with the credentials defined in `backend/.env.example` (`MYSQL_USER` / `MYSQL_PASSWORD`). To pin a different host port for one run: `MYSQL_HOST_PORT=3310 docker compose up`.
 
 ## Configuration
 
@@ -67,7 +67,7 @@ The following table lists every configurable parameter:
 | Variable | Value | Description |
 |----------|-------|-------------|
 | `APP_NAME` | `FieldOps Service Suite` | Application display name |
-| `APP_ENV` | `production` | Environment mode (production/testing) |
+| `APP_ENV` | `development` | Environment mode (development/testing/production). The committed default is `development` so the dev placeholder `ENCRYPTION_KEY` is permitted; override to `production` on real deployments. |
 | `APP_DEBUG` | `false` | Debug mode toggle |
 | `APP_URL` | `http://localhost:8000` | Backend base URL |
 | `API_PREFIX` | `/api/v1` | API route prefix |
@@ -364,7 +364,7 @@ frontend/
     pages/             login.js, dashboard.js, orders.js, kiosk.js,
                        technicianQueue.js, finance.js, admin.js,
                        environmental.js, cleansing.js, auditLogs.js,
-                       orderDetail.js
+                       forbidden.js
     router/            index.js (route table + per-route role allowlist
                        — the single source the sidebar filters against)
     services/          api.js, auth.js
