@@ -109,38 +109,54 @@ function request(method, path, options) {
         return { data: null, status: 204 };
       }
 
-      // Read the body as TEXT first, then parse. Going directly through
-      // response.json() throws a generic "Unexpected token … is not
-      // valid JSON" with no way to inspect what actually came back -
-      // and "what actually came back" is exactly what you need when
-      // diagnosing the stray-whitespace / leaked-PHP-warning class of
-      // bug that broke the login store dropdown. With the raw text in
-      // hand we can: (a) trim leading whitespace defensively (so a
-      // single rogue space prepended to a real JSON envelope doesn't
-      // 500 the login page); (b) on a real parse failure, log the
-      // first ~500 chars of the body so the actual culprit is visible
-      // in DevTools instead of opaque.
-      return response.text().then(function (rawText) {
-        var trimmed = (rawText || '').replace(/^[\s﻿\xA0]+/, '');
-        var data;
-        try {
-          data = trimmed === '' ? null : JSON.parse(trimmed);
-        } catch (parseErr) {
-          console.error(
-            '[api] ' + method.toUpperCase() + ' ' + path +
-              ' returned non-JSON body (status ' + response.status + '). ' +
-              'First 500 chars of response:\n' +
-              (rawText || '').slice(0, 500)
-          );
-          var jsonErr = new Error(
-            'Server returned non-JSON response (status ' + response.status + '). ' +
-              'See console for the raw body.'
-          );
-          jsonErr.status = response.status || 0;
-          jsonErr.errors = null;
-          throw jsonErr;
-        }
+      // Read the body. We PREFER response.text() + JSON.parse() in
+      // production - going through text() means a single rogue
+      // whitespace byte prepended to the JSON (a stray echo, a PHP
+      // warning that leaked past display_errors, a vendor file with
+      // trailing whitespace after `?>`) can be trimmed defensively
+      // before parsing, AND on a real parse failure we can log the
+      // first ~500 chars of the actual body so the culprit is visible
+      // in DevTools instead of an opaque "Unexpected token …".
+      //
+      // BUT test mocks throughout the suite stub fetch() with objects
+      // that only define .json() (because that's what the old
+      // implementation called). Calling .text() on those mocks throws
+      // "response.text is not a function" and breaks every test that
+      // exercises the request pipeline. Detect and prefer .text(),
+      // fall back to .json() so both real fetch responses and the
+      // suite's lightweight mocks work.
+      var bodyPromise;
+      if (typeof response.text === 'function') {
+        bodyPromise = response.text().then(function (rawText) {
+          var trimmed = (rawText || '').replace(/^[\s﻿\xA0]+/, '');
+          if (trimmed === '') {
+            return null;
+          }
+          try {
+            return JSON.parse(trimmed);
+          } catch (parseErr) {
+            console.error(
+              '[api] ' + method.toUpperCase() + ' ' + path +
+                ' returned non-JSON body (status ' + response.status + '). ' +
+                'First 500 chars of response:\n' +
+                (rawText || '').slice(0, 500)
+            );
+            var jsonErr = new Error(
+              'Server returned non-JSON response (status ' + response.status + '). ' +
+                'See console for the raw body.'
+            );
+            jsonErr.status = response.status || 0;
+            jsonErr.errors = null;
+            throw jsonErr;
+          }
+        });
+      } else if (typeof response.json === 'function') {
+        bodyPromise = response.json();
+      } else {
+        bodyPromise = Promise.resolve(null);
+      }
 
+      return bodyPromise.then(function (data) {
         if (!response.ok) {
           var err = normalizeError(response.status, data);
           var error = new Error(err.message);
