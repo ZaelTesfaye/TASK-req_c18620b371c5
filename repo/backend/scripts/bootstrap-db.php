@@ -99,18 +99,65 @@ try {
 }
 
 /**
- * Apply a .sql file by stripping line comments and splitting on `;` at
- * end-of-line. The init/seed files use only plain DDL/INSERT — no
- * string literals contain `;`, so a naive split is safe and avoids
- * pulling in a SQL parser.
+ * Apply a .sql file. Honours `DELIMITER` directives so trigger /
+ * procedure bodies that contain inline `;` (e.g.,
+ * SIGNAL SQLSTATE ... SET MESSAGE_TEXT = '...';) are kept intact.
+ * Without this, the trigger block in init.sql gets split at the first
+ * internal `;` and PDO rejects the fragment as a syntax error.
+ *
+ * DELIMITER itself is a mysql-client directive (not real SQL), so the
+ * line is consumed but never sent to the server.
+ *
+ * Limitations: this is a line-oriented splitter, not a tokenizer. It
+ * assumes DELIMITER appears on its own line (the mysql client's
+ * requirement) and that the chosen delimiter only appears at end of
+ * line outside string literals. Both hold for our init/seed files.
  */
-$applySqlFile = function (string $path) use ($pdo): int {
-    $sql = file_get_contents($path);
-    $sql = preg_replace('/^\s*--.*$/m', '', $sql);
-    $statements = array_filter(
-        array_map('trim', preg_split('/;\s*[\r\n]+/', $sql)),
-        fn($s) => $s !== ''
-    );
+$splitSql = function (string $sql): array {
+    // Strip MySQL line comments (both full-line and trailing inline).
+    // Inline form requires whitespace before `--` per MySQL grammar, so
+    // matching `\s--` avoids eating `--` inside an identifier or
+    // numeric literal. Without this strip, lines like
+    //   (8, 2); -- frontdesk2 -> Front Desk
+    // no longer end with `;` after the comment, the statement boundary
+    // is missed, and the rest of the file accumulates into one giant
+    // multi-statement blob that PDO::exec rejects.
+    $sql = preg_replace('/^\s*--[^\n]*$/m', '', $sql);
+    $sql = preg_replace('/[ \t]+--[^\n]*$/m', '', $sql);
+    $lines = preg_split('/\r?\n/', $sql);
+    $delimiter = ';';
+    $statements = [];
+    $buffer = '';
+    foreach ($lines as $line) {
+        $trimmed = trim($line);
+        if (preg_match('/^DELIMITER\s+(\S+)\s*$/i', $trimmed, $m)) {
+            $pending = trim($buffer);
+            if ($pending !== '') {
+                $statements[] = $pending;
+            }
+            $buffer = '';
+            $delimiter = $m[1];
+            continue;
+        }
+        $buffer .= $line . "\n";
+        $candidate = rtrim($buffer);
+        if ($candidate !== '' && str_ends_with($candidate, $delimiter)) {
+            $stmt = trim(substr($candidate, 0, -strlen($delimiter)));
+            if ($stmt !== '') {
+                $statements[] = $stmt;
+            }
+            $buffer = '';
+        }
+    }
+    $tail = trim($buffer);
+    if ($tail !== '') {
+        $statements[] = $tail;
+    }
+    return $statements;
+};
+
+$applySqlFile = function (string $path) use ($pdo, $splitSql): int {
+    $statements = $splitSql(file_get_contents($path));
     $count = 0;
     foreach ($statements as $stmt) {
         try {
