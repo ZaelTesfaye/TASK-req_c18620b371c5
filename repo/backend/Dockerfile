@@ -40,4 +40,4 @@ EXPOSE 8000
 # ExceptionHandler / RequestLogMiddleware chain so genuine 4xx/5xx come
 # back as proper JSON. Error logs go to /tmp/php-errors.log so they
 # survive beyond the request.
-CMD ["sh", "-c", "cron || echo 'cron failed to start (non-fatal)'; echo '[backend] starting PHP server on 0.0.0.0:8000'; exec php -d log_errors=1 -d error_log=/tmp/php-errors.log -S 0.0.0.0:8000 -t public/ public/router.php"]
+CMD ["sh", "-c", "cron || echo 'cron failed to start (non-fatal)'; echo '[backend] running bootstrap-db.php'; php /app/scripts/bootstrap-db.php || { echo '[backend] FATAL: bootstrap-db.php failed'; exit 1; }; echo '[backend] starting PHP server on 0.0.0.0:8000'; exec php -d log_errors=1 -d error_log=/tmp/php-errors.log -S 0.0.0.0:8000 -t public/ public/router.php"]
