@@ -7,7 +7,7 @@ SET NAMES utf8mb4;
 -- ============================================================
 -- Roles (canonical codes and display names)
 -- ============================================================
-INSERT INTO `roles` (`id`, `code`, `name`) VALUES
+INSERT IGNORE INTO `roles` (`id`, `code`, `name`) VALUES
 (1, 'customer', 'Customer'),
 (2, 'front_desk', 'Front Desk'),
 (3, 'technician', 'Technician'),
@@ -18,14 +18,14 @@ INSERT INTO `roles` (`id`, `code`, `name`) VALUES
 -- ============================================================
 -- Stores
 -- ============================================================
-INSERT INTO `stores` (`id`, `code`, `name`, `timezone`) VALUES
+INSERT IGNORE INTO `stores` (`id`, `code`, `name`, `timezone`) VALUES
 (1, 'STORE-001', 'Downtown Service Center', 'America/New_York'),
 (2, 'STORE-002', 'Midtown Service Hub', 'America/Chicago');
 
 -- ============================================================
 -- Workstations
 -- ============================================================
-INSERT INTO `workstations` (`id`, `store_id`, `code`, `name`, `active`) VALUES
+INSERT IGNORE INTO `workstations` (`id`, `store_id`, `code`, `name`, `active`) VALUES
 (1, 1, 'WS-001', 'Front Desk Terminal 1', 1),
 (2, 1, 'WS-002', 'Front Desk Terminal 2', 1),
 (3, 1, 'WS-003', 'Kiosk Station 1', 1),
@@ -39,7 +39,7 @@ INSERT INTO `workstations` (`id`, `store_id`, `code`, `name`, `active`) VALUES
 -- Actual hash computed: password_hash will be set by application seeder
 -- For SQL seed, we use pre-computed bcrypt values
 -- ============================================================
-INSERT INTO `users` (`id`, `username`, `password_hash`, `password_salt`, `status`, `failed_attempts`, `lockout_until`, `default_role_id`) VALUES
+INSERT IGNORE INTO `users` (`id`, `username`, `password_hash`, `password_salt`, `status`, `failed_attempts`, `lockout_until`, `default_role_id`) VALUES
 (1, 'admin', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'fieldops_demo_salt_v1', 'active', 0, NULL, 6),
 (2, 'frontdesk1', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'fieldops_demo_salt_v1', 'active', 0, NULL, 2),
 (3, 'tech1', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'fieldops_demo_salt_v1', 'active', 0, NULL, 3),
@@ -52,7 +52,7 @@ INSERT INTO `users` (`id`, `username`, `password_hash`, `password_salt`, `status
 -- ============================================================
 -- User-Role Assignments
 -- ============================================================
-INSERT INTO `user_roles` (`user_id`, `role_id`) VALUES
+INSERT IGNORE INTO `user_roles` (`user_id`, `role_id`) VALUES
 (1, 6), -- admin -> Administrator
 (2, 2), -- frontdesk1 -> Front Desk
 (3, 3), -- tech1 -> Technician
@@ -65,7 +65,7 @@ INSERT INTO `user_roles` (`user_id`, `role_id`) VALUES
 -- ============================================================
 -- User Store/Workstation Bindings
 -- ============================================================
-INSERT INTO `user_store_workstation_bindings` (`user_id`, `store_id`, `workstation_id`, `active`, `assigned_by`) VALUES
+INSERT IGNORE INTO `user_store_workstation_bindings` (`user_id`, `store_id`, `workstation_id`, `active`, `assigned_by`) VALUES
 (1, 1, 1, 1, 1),  -- admin at Store 1, WS 1
 (2, 1, 1, 1, 1),  -- frontdesk1 at Store 1, WS 1
 (3, 1, 2, 1, 1),  -- tech1 at Store 1, WS 2
@@ -78,7 +78,7 @@ INSERT INTO `user_store_workstation_bindings` (`user_id`, `store_id`, `workstati
 -- ============================================================
 -- Store Zones (for environmental data)
 -- ============================================================
-INSERT INTO `store_zones` (`id`, `store_id`, `zone_code`, `zone_name`) VALUES
+INSERT IGNORE INTO `store_zones` (`id`, `store_id`, `zone_code`, `zone_name`) VALUES
 (1, 1, 'ZONE-A', 'Main Service Area'),
 (2, 1, 'ZONE-B', 'Waiting Room'),
 (3, 2, 'ZONE-A', 'Main Service Area');
@@ -86,20 +86,20 @@ INSERT INTO `store_zones` (`id`, `store_id`, `zone_code`, `zone_name`) VALUES
 -- ============================================================
 -- Encryption Keys (demo key - in production, generate securely)
 -- ============================================================
-INSERT INTO `encryption_keys` (`key_version`, `key_material_encrypted`, `status`) VALUES
+INSERT IGNORE INTO `encryption_keys` (`key_version`, `key_material_encrypted`, `status`) VALUES
 (1, 'base64:ZmllbGRvcHNfZGVtb19lbmNyeXB0aW9uX2tleV92MQ==', 'active');
 
 -- ============================================================
 -- Demo Coupons
 -- ============================================================
-INSERT INTO `coupons` (`code`, `store_id`, `title`, `discount_type`, `discount_value`, `min_spend`, `usage_limit_total`, `usage_limit_per_user`, `valid_from`, `valid_to`, `active`) VALUES
+INSERT IGNORE INTO `coupons` (`code`, `store_id`, `title`, `discount_type`, `discount_value`, `min_spend`, `usage_limit_total`, `usage_limit_per_user`, `valid_from`, `valid_to`, `active`) VALUES
 ('WELCOME10', 1, 'Welcome 10% Off', 'percent', 10.00, 50.00, 100, 1, '2025-01-01 00:00:00', '2027-12-31 23:59:59', 1),
 ('SAVE5', NULL, 'Save $5', 'fixed', 5.00, 25.00, NULL, 3, '2025-01-01 00:00:00', '2027-12-31 23:59:59', 1);
 
 -- ============================================================
 -- Metric Definitions
 -- ============================================================
-INSERT INTO `metric_definitions` (`metric_key`, `numerator_definition`, `denominator_definition`, `aggregation_window`, `active`) VALUES
+INSERT IGNORE INTO `metric_definitions` (`metric_key`, `numerator_definition`, `denominator_definition`, `aggregation_window`, `active`) VALUES
 ('transaction_volume', 'count(orders where created_at in range)', '1', 'daily', 1),
 ('avg_fulfillment_time', 'sum(completed_at - confirmed_at for completed orders)', 'count(completed orders)', 'daily', 1),
 ('cancellation_rate', 'count(cancelled orders)', 'count(total orders)', 'daily', 1),
@@ -113,7 +113,7 @@ INSERT INTO `metric_definitions` (`metric_key`, `numerator_definition`, `denomin
 -- ============================================================
 -- Formula Versions (comfort index default)
 -- ============================================================
-INSERT INTO `formula_versions` (`formula_key`, `version_no`, `formula_expression`, `threshold_json`, `effective_from`, `created_by`) VALUES
+INSERT IGNORE INTO `formula_versions` (`formula_key`, `version_no`, `formula_expression`, `threshold_json`, `effective_from`, `created_by`) VALUES
 ('comfort_index', 1, '0.4 * normalized_temperature + 0.3 * normalized_humidity + 0.3 * normalized_air_quality', '{"comfortable": {"min": 0.7, "max": 1.0}, "moderate": {"min": 0.4, "max": 0.7}, "uncomfortable": {"min": 0.0, "max": 0.4}}', '2025-01-01 00:00:00', 1),
 ('moving_average', 1, 'AVG(values) OVER (window_size)', '{"window_size": 5}', '2025-01-01 00:00:00', 1),
 ('rate_of_change', 1, '(current - previous) / previous', '{}', '2025-01-01 00:00:00', 1);
@@ -121,7 +121,7 @@ INSERT INTO `formula_versions` (`formula_key`, `version_no`, `formula_expression
 -- ============================================================
 -- Sensor Sources (demo)
 -- ============================================================
-INSERT INTO `sensor_sources` (`store_id`, `zone_id`, `source_type`, `source_name`, `active`) VALUES
+INSERT IGNORE INTO `sensor_sources` (`store_id`, `zone_id`, `source_type`, `source_name`, `active`) VALUES
 (1, 1, 'sensor', 'Temperature Sensor A1', 1),
 (1, 1, 'sensor', 'Humidity Sensor A1', 1),
 (1, 2, 'sensor', 'Temperature Sensor B1', 1),
@@ -136,6 +136,6 @@ INSERT INTO `sensor_sources` (`store_id`, `zone_id`, `source_type`, `source_name
 -- deterministic target without forcing them to create their own drawer
 -- (which would couple them to the open-drawer endpoint's behaviour).
 -- ============================================================
-INSERT INTO `cash_drawer_daily` (`store_id`, `business_date`, `opened_by`, `open_amount`, `status`) VALUES
+INSERT IGNORE INTO `cash_drawer_daily` (`store_id`, `business_date`, `opened_by`, `open_amount`, `status`) VALUES
 (1, '2025-01-01', 5, 100.00, 'open'),
 (2, '2025-01-01', 5, 100.00, 'open');
