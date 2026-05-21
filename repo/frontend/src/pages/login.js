@@ -40,26 +40,108 @@ var _stores = [];
 var _workstations = [];
 
 /**
+ * Re-render Layui's custom dropdown wrapper after we mutate the
+ * underlying native <select>. Layui creates a sibling DOM tree to
+ * display selects; without this call, the wrapper keeps showing the
+ * old options even though `selectEl.innerHTML` has been updated, so
+ * the user sees a stale "-- Select Store --" / stale failure label.
+ */
+function rerenderLayuiSelect() {
+  if (typeof layui !== 'undefined' && layui.form) {
+    layui.form.render('select', 'login-form-filter');
+  }
+}
+
+/**
+ * Common loader for the two bootstrap dropdowns. Fetches with bounded
+ * retries so a transient backend-still-booting blip recovers on its
+ * own (the previous implementation showed "Failed to load …" on the
+ * very first 502/network hiccup and never retried, which made the
+ * login page look permanently broken even when the backend came up
+ * two seconds later). On terminal failure logs the actual cause to
+ * the console — the previous `.catch(function () { … })` swallowed
+ * the error entirely so there was no way to tell whether it was a
+ * 503, a JSON parse error, a CORS rejection, or a DOM exception
+ * inside the success handler.
+ *
+ * @param {string}       label      Human label for the option text + log
+ * @param {string}       path       API path (relative to /api/v1)
+ * @param {object|null}  params     Query params or null
+ * @param {HTMLElement}  selectEl   Target <select> to repopulate
+ * @param {string}       placeholder First option ("-- Select … --")
+ * @param {function}     applyData  (data) => void, populates options from response
+ */
+function loadDropdownWithRetry(label, path, params, selectEl, placeholder, applyData) {
+  if (!selectEl) return;
+  selectEl.innerHTML = '<option value="">Loading ' + label + '…</option>';
+  rerenderLayuiSelect();
+
+  var attempt = 0;
+  var maxAttempts = 4; // ~0 + 600 + 1500 + 3000 = ≈5s total window
+
+  function tryOnce() {
+    attempt++;
+    api.get(path, params).then(function (res) {
+      // Defensive: api.js unwraps the envelope so res.data should be
+      // the payload array. If something upstream returned a non-array
+      // (e.g. a stringified HTML page that slipped past JSON parsing),
+      // treat it as an empty result rather than rendering "[object Object]"
+      // characters into the options.
+      var items = Array.isArray(res && res.data) ? res.data : [];
+      try {
+        applyData(items, selectEl, placeholder);
+      } catch (renderErr) {
+        // A throw inside applyData would otherwise bubble into Promise's
+        // implicit catch and look like a network failure. Surface it.
+        console.error('[login] ' + label + ' render failed:', renderErr);
+        showFinalFailure();
+        return;
+      }
+      rerenderLayuiSelect();
+    }).catch(function (err) {
+      console.error('[login] ' + label + ' fetch failed (attempt ' + attempt + '/' + maxAttempts + '):', err);
+      if (attempt < maxAttempts) {
+        // Backoff: 600ms, 1500ms, 3000ms. Backend's bootstrap-db.php
+        // typically finishes within ~3s on a warm volume; this window
+        // covers the cold-start path.
+        var delay = attempt === 1 ? 600 : attempt === 2 ? 1500 : 3000;
+        setTimeout(tryOnce, delay);
+      } else {
+        showFinalFailure(err);
+      }
+    });
+  }
+
+  function showFinalFailure(err) {
+    var hint = err && err.message ? ' (' + err.message + ')' : '';
+    selectEl.innerHTML =
+      '<option value="">Failed to load ' + label + hint + '</option>';
+    rerenderLayuiSelect();
+  }
+
+  tryOnce();
+}
+
+/**
  * Fetch available stores for the dropdown.
  */
 function loadStores(selectEl) {
-  api.get('/auth/bootstrap/stores').then(function (res) {
-    _stores = res.data || [];
-    var html = '<option value="">-- Select Store --</option>';
-    for (var i = 0; i < _stores.length; i++) {
-      var s = _stores[i];
-      html += '<option value="' + s.id + '">' + (s.name || s.id) + '</option>';
+  loadDropdownWithRetry(
+    'stores',
+    '/auth/bootstrap/stores',
+    null,
+    selectEl,
+    '-- Select Store --',
+    function (items, el, placeholder) {
+      _stores = items;
+      var html = '<option value="">' + placeholder + '</option>';
+      for (var i = 0; i < items.length; i++) {
+        var s = items[i];
+        html += '<option value="' + s.id + '">' + (s.name || s.id) + '</option>';
+      }
+      el.innerHTML = html;
     }
-    selectEl.innerHTML = html;
-    if (typeof layui !== 'undefined' && layui.form) {
-      layui.form.render('select', 'login-form-filter');
-    }
-  }).catch(function () {
-    selectEl.innerHTML = '<option value="">Failed to load stores</option>';
-    if (typeof layui !== 'undefined' && layui.form) {
-      layui.form.render('select', 'login-form-filter');
-    }
-  });
+  );
 }
 
 /**
@@ -69,29 +151,26 @@ function loadWorkstations(storeId, selectEl) {
   if (!storeId) {
     selectEl.innerHTML = '<option value="">-- Select Workstation --</option>';
     _workstations = [];
-    if (typeof layui !== 'undefined' && layui.form) {
-      layui.form.render('select', 'login-form-filter');
-    }
+    rerenderLayuiSelect();
     return;
   }
 
-  api.get('/auth/bootstrap/workstations', { store_id: storeId }).then(function (res) {
-    _workstations = res.data || [];
-    var html = '<option value="">-- Select Workstation --</option>';
-    for (var i = 0; i < _workstations.length; i++) {
-      var w = _workstations[i];
-      html += '<option value="' + w.id + '">' + (w.name || w.id) + '</option>';
+  loadDropdownWithRetry(
+    'workstations',
+    '/auth/bootstrap/workstations',
+    { store_id: storeId },
+    selectEl,
+    '-- Select Workstation --',
+    function (items, el, placeholder) {
+      _workstations = items;
+      var html = '<option value="">' + placeholder + '</option>';
+      for (var i = 0; i < items.length; i++) {
+        var w = items[i];
+        html += '<option value="' + w.id + '">' + (w.name || w.id) + '</option>';
+      }
+      el.innerHTML = html;
     }
-    selectEl.innerHTML = html;
-    if (typeof layui !== 'undefined' && layui.form) {
-      layui.form.render('select', 'login-form-filter');
-    }
-  }).catch(function () {
-    selectEl.innerHTML = '<option value="">Failed to load workstations</option>';
-    if (typeof layui !== 'undefined' && layui.form) {
-      layui.form.render('select', 'login-form-filter');
-    }
-  });
+  );
 }
 
 /**
