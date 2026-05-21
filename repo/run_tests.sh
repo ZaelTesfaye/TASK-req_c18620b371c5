@@ -7,6 +7,24 @@
 set -e
 
 COMPOSE_FILE="docker-compose.yml"
+
+# Resolve the compose CLI once. Modern Docker ships V2 as a plugin
+# (`docker compose ...`); the legacy V1 binary (`docker-compose ...`)
+# was hardcoded here previously and broke on every host that only
+# installed the plugin form, with a hard "command not found" before
+# any test could run. Prefer V2, fall back to V1, error loudly if
+# neither is available. COMPOSE is expanded unquoted at every call
+# site below so the `docker compose` form parses as two argv tokens.
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE="docker compose"
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE="docker-compose"
+else
+    echo "ERROR: neither 'docker compose' (V2 plugin) nor 'docker-compose' (V1 binary) is available." >&2
+    echo "Install the Docker Compose plugin: https://docs.docker.com/compose/install/linux/" >&2
+    exit 127
+fi
+
 BACKEND_PASS=0
 BACKEND_FAIL=0
 FRONTEND_PASS=0
@@ -31,7 +49,7 @@ echo ""
 # debugging a specific test against data you've set up by hand).
 if [ "${SKIP_DB_RESET:-0}" != "1" ]; then
     echo "[0/5] Resetting stack and MySQL volume..."
-    docker-compose -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
+    $COMPOSE -f "$COMPOSE_FILE" down -v --remove-orphans 2>/dev/null || true
     echo ""
 fi
 
@@ -41,7 +59,7 @@ fi
 # `docker compose build`, not what's on disk. `--pull=false` keeps base
 # images cached; only the project layers rebuild when inputs change.
 echo "[1/5] Rebuilding test images..."
-docker-compose -f "$COMPOSE_FILE" --profile test --profile e2e build --pull=false \
+$COMPOSE -f "$COMPOSE_FILE" --profile test --profile e2e build --pull=false \
     backend test-backend test-frontend test-e2e
 echo ""
 
@@ -53,14 +71,14 @@ echo ""
 # on Windows Docker (the default --wait-timeout of 60s then kills the
 # whole script with set -e before any test runs).
 echo "[2/5] Starting database service..."
-docker-compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 mysql
+$COMPOSE -f "$COMPOSE_FILE" up -d --wait --wait-timeout 180 mysql
 echo "MySQL is ready (TCP 3306 reachable)."
 echo ""
 
 # Run backend tests (unit + API with built-in PHP server)
 echo "[3/5] Running backend tests..."
 echo "----------------------------------------------"
-if docker-compose -f "$COMPOSE_FILE" --profile test run --rm test-backend; then
+if $COMPOSE -f "$COMPOSE_FILE" --profile test run --rm test-backend; then
     echo "Backend tests: PASSED"
     BACKEND_PASS=1
 else
@@ -73,7 +91,7 @@ echo ""
 # Run frontend tests
 echo "[4/5] Running frontend tests..."
 echo "----------------------------------------------"
-if docker-compose -f "$COMPOSE_FILE" --profile test run --rm test-frontend; then
+if $COMPOSE -f "$COMPOSE_FILE" --profile test run --rm test-frontend; then
     echo "Frontend tests: PASSED"
     FRONTEND_PASS=1
 else
@@ -88,14 +106,14 @@ echo ""
 # previously running container from an older image keeps serving stale
 # code and the E2E phase hangs at "Waiting for backend to be ready".
 echo "[5/5] Starting services for E2E tests..."
-docker-compose -f "$COMPOSE_FILE" up -d --force-recreate --no-deps mysql backend frontend
+$COMPOSE -f "$COMPOSE_FILE" up -d --force-recreate --no-deps mysql backend frontend
 echo "Waiting for backend to be ready (max ~60s)..."
 ATTEMPTS=0
 until curl -sf http://localhost:8000/api/v1/auth/me > /dev/null 2>&1 || [ $? -eq 22 ]; do
     ATTEMPTS=$((ATTEMPTS + 1))
     if [ "$ATTEMPTS" -gt 30 ]; then
         echo "Backend did not become ready within 60s — check 'docker compose logs backend'."
-        docker-compose -f "$COMPOSE_FILE" logs --tail=30 backend
+        $COMPOSE -f "$COMPOSE_FILE" logs --tail=30 backend
         EXIT_CODE=1
         break
     fi
@@ -110,13 +128,13 @@ echo "Backend is ready."
 # E2E login returns INVALID_CREDENTIALS and after 5 attempts the demo
 # users lock themselves out.
 echo "[5/5] Reseeding demo password hashes..."
-docker-compose -f "$COMPOSE_FILE" exec -T backend php scripts/seed-passwords.php \
+$COMPOSE -f "$COMPOSE_FILE" exec -T backend php scripts/seed-passwords.php \
     || echo "(could not reseed demo passwords — E2E login tests will likely fail)"
 echo ""
 
 echo "Running fullstack E2E tests..."
 echo "----------------------------------------------"
-if docker-compose -f "$COMPOSE_FILE" --profile e2e run --rm test-e2e; then
+if $COMPOSE -f "$COMPOSE_FILE" --profile e2e run --rm test-e2e; then
     echo "E2E tests: PASSED"
     E2E_PASS=1
 else
