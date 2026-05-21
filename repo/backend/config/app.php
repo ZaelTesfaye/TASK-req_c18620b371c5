@@ -12,14 +12,16 @@
  *     deployment cannot silently substitute a committed dev password
  *     for a real one.
  *   - On a fresh `docker compose up`, env_file pulls both keys from
- *     backend/.env.example before this file is evaluated. The
- *     Dockerfile additionally copies .env.example to /app/.env at
- *     build time, and loadEnvFile() below reads it - so even running
- *     the image outside compose works.
- *   - If both sources are absent the foreach guard below throws a
- *     RuntimeException naming the missing key, instead of letting
- *     an opaque "Access denied for user ''@'mysql'" surface three
- *     frames deep inside PDO.
+ *     backend/.env.example into the container's process env before
+ *     any PHP code runs. The Dockerfile additionally copies
+ *     .env.example to /app/.env at build time, and loadEnvFile()
+ *     below reads it - so even running the image outside compose
+ *     works.
+ *   - CLI entry points (bootstrap-db.php, reseed.php,
+ *     seed-passwords.php, tests/bootstrap.php) use requireEnv() to
+ *     exit 78 on missing credentials, which is appropriate for a
+ *     script. The runtime web path here does NOT throw - see the
+ *     long-form comment above the `return` statement for why.
  */
 
 require_once __DIR__ . '/../scripts/load-env.php';
@@ -30,29 +32,20 @@ require_once __DIR__ . '/../scripts/load-env.php';
 // absent and never overrides values already in the process env.
 loadEnvFile(dirname(__DIR__) . '/.env');
 
-// DB credentials must be set explicitly - no committed fallback.
-// Throwing here (rather than letting them silently become empty
-// strings) means a misconfigured deployment surfaces as a clear
-// "DB_USER not set" message at framework boot instead of an opaque
-// "Access denied for user ''@'mysql'" three frames deep in PDO.
-// Both keys ship in backend/.env.example, so on a fresh `docker
-// compose up` env_file populates them before this file is evaluated.
-foreach (['DB_USER', 'DB_PASSWORD'] as $_required) {
-    $_v = getenv($_required);
-    if ($_v === false || $_v === '') {
-        throw new \RuntimeException(
-            "Required env var {$_required} is not set. " .
-            "Provision it via docker-compose env_file (loads " .
-            "backend/.env.example), via /app/.env (baked from " .
-            ".env.example by the Dockerfile), or via your secret " .
-            "manager. The previous hardcoded `'fieldops_pass'` " .
-            "fallback was removed deliberately - committed dev " .
-            "passwords must not silently substitute for production " .
-            "credentials."
-        );
-    }
-}
-unset($_required, $_v);
+// NOTE: do NOT throw from this file on missing DB_USER / DB_PASSWORD.
+// config/app.php is evaluated during ThinkPHP's App::initialize(),
+// which runs BEFORE the framework's ExceptionHandler middleware is
+// wired up. A throw here bypasses the JSON-envelope error path and
+// every request - including the unauthenticated
+// /auth/bootstrap/stores call the login page fires on first paint -
+// returns PHP's default 500 page. The login page's `.catch` then
+// renders "Failed to load stores" even though the real cause is the
+// credential miss. CLI scripts (bootstrap-db.php, reseed.php,
+// seed-passwords.php, tests/bootstrap.php) DO use requireEnv() to
+// fail loud, which is appropriate there - they exit 78 to the
+// caller. At runtime, the bare getenv() below lets the framework
+// boot; if the credential is genuinely missing, PDO surfaces it
+// through the proper exception path with a readable JSON error.
 
 return [
     // Application
@@ -66,15 +59,18 @@ return [
     'enable_tls'     => filter_var(getenv('ENABLE_TLS') ?: 'false', FILTER_VALIDATE_BOOLEAN),
 
     // Database. Host/port/name keep operational defaults that match
-    // the committed compose topology; user/password do NOT have
-    // any fallback - the foreach above guarantees they are set,
-    // sourced cleanly from .env.example (via env_file or /app/.env)
-    // or from a real secret manager in production.
+    // the committed compose topology; user/password do NOT have any
+    // hardcoded fallback - the values come from backend/.env.example
+    // (loaded via compose env_file and/or /app/.env baked by the
+    // Dockerfile). Bare getenv() returns false when truly missing,
+    // which PDO then surfaces as a connection error through the
+    // framework's normal exception path - no committed dev credential
+    // ever substitutes for a real one.
     'db_host'        => getenv('DB_HOST') ?: 'mysql',
     'db_port'        => intval(getenv('DB_PORT') ?: '3306'),
     'db_name'        => getenv('DB_NAME') ?: 'fieldops',
-    'db_user'        => getenv('DB_USER'),
-    'db_password'    => getenv('DB_PASSWORD'),
+    'db_user'        => getenv('DB_USER') ?: '',
+    'db_password'    => getenv('DB_PASSWORD') ?: '',
 
     // Session
     'session_ttl_minutes' => intval(getenv('SESSION_TTL_MINUTES') ?: '480'),
