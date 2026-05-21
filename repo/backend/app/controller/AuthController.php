@@ -2,6 +2,7 @@
 namespace app\controller;
 
 use app\common\ResponseHelper;
+use app\logging\Logger;
 use app\service\AuthService;
 use think\facade\Db;
 use think\Request;
@@ -140,11 +141,25 @@ class AuthController
      */
     public function bootstrapStores(Request $request)
     {
-        $stores = Db::table('stores')
-            ->field('id,name')
-            ->order('id', 'asc')
-            ->select()
-            ->toArray();
+        try {
+            $stores = Db::table('stores')
+                ->field('id,name')
+                ->order('id', 'asc')
+                ->select()
+                ->toArray();
+        } catch (\Throwable $e) {
+            // Login is the only entry point to the app; a hard 500 here
+            // strands the user on a blank dropdown with no escape. Log
+            // the cause and return an empty list with a 503 so the
+            // client can render a "try again" hint while preserving the
+            // standard JSON envelope (no HTML, no localized framework
+            // page).
+            Logger::error('auth', 'bootstrap_stores_failed', $e->getMessage(), [
+                'exception_class' => get_class($e),
+            ]);
+            $resp = ResponseHelper::error('STORES_UNAVAILABLE', 'Store list is temporarily unavailable', 503);
+            return json($resp['data'], $resp['code']);
+        }
 
         $resp = ResponseHelper::success($stores);
         return json($resp['data'], $resp['code']);
@@ -157,12 +172,20 @@ class AuthController
      */
     public function bootstrapWorkstations(Request $request)
     {
-        $storeId = (int) $request->get('store_id', 0);
-        $query = Db::table('workstations')->field('id,store_id,name');
-        if ($storeId > 0) {
-            $query->where('store_id', $storeId);
+        try {
+            $storeId = (int) $request->get('store_id', 0);
+            $query = Db::table('workstations')->field('id,store_id,name');
+            if ($storeId > 0) {
+                $query->where('store_id', $storeId);
+            }
+            $workstations = $query->order('id', 'asc')->select()->toArray();
+        } catch (\Throwable $e) {
+            Logger::error('auth', 'bootstrap_workstations_failed', $e->getMessage(), [
+                'exception_class' => get_class($e),
+            ]);
+            $resp = ResponseHelper::error('WORKSTATIONS_UNAVAILABLE', 'Workstation list is temporarily unavailable', 503);
+            return json($resp['data'], $resp['code']);
         }
-        $workstations = $query->order('id', 'asc')->select()->toArray();
 
         $resp = ResponseHelper::success($workstations);
         return json($resp['data'], $resp['code']);
