@@ -1,6 +1,12 @@
 /**
  * Navigation Component Tests
- * Tests shipped Navigation module for role-specific menu rendering.
+ *
+ * Tests the post-refactor contract: there is a single flat MENU_ITEMS
+ * catalog, and the menu the user sees is derived from
+ * router.hasAccess() at render time. Per-role menu configuration is
+ * no longer maintained as a separate map (that was the source of the
+ * drift bug where front_desk was offered "Cleansing" even though the
+ * cleansing route is restricted to store_manager + administrator).
  */
 
 // Mock localStorage
@@ -21,71 +27,102 @@ const store = require('../../src/store/index');
 const navigation = require('../../src/components/Navigation');
 const router = require('../../src/router/index');
 
-describe('Navigation Component - Role Menus', () => {
+function labelsForRole(role) {
+    store.setRoles([role]);
+    return navigation.getMenuItems().map(function (i) { return i.label; });
+}
+
+function routesForRole(role) {
+    store.setRoles([role]);
+    return navigation.getMenuItems().map(function (i) { return i.route; });
+}
+
+describe('Navigation - per-role menu derives from route access', () => {
     beforeEach(() => {
         store.clear();
     });
 
-    test('customer sees Dashboard, My Orders, Kiosk', () => {
-        const items = navigation.MENU_CONFIG[router.ROLES.CUSTOMER];
-        const labels = items.map(i => i.label);
+    test('customer cannot see dashboard, admin, finance, audit logs', () => {
+        const routes = routesForRole(router.ROLES.CUSTOMER);
+        // customer is permitted on: orders, kiosk
+        expect(routes).toContain('orders');
+        expect(routes).toContain('kiosk');
+        expect(routes).not.toContain('dashboard');
+        expect(routes).not.toContain('admin');
+        expect(routes).not.toContain('finance');
+        expect(routes).not.toContain('audit-logs');
+        expect(routes).not.toContain('cleansing');
+    });
+
+    test('front desk cannot see cleansing or admin', () => {
+        // Regression test for the menu-drift bug: front desk used to
+        // be offered Cleansing here, click it, and immediately 403.
+        const routes = routesForRole(router.ROLES.FRONT_DESK);
+        expect(routes).toContain('orders');
+        expect(routes).toContain('kiosk');
+        expect(routes).not.toContain('cleansing');
+        expect(routes).not.toContain('admin');
+        expect(routes).not.toContain('dashboard');
+        expect(routes).not.toContain('finance');
+    });
+
+    test('technician sees queue and orders only', () => {
+        const routes = routesForRole(router.ROLES.TECHNICIAN);
+        expect(routes).toContain('technician-queue');
+        expect(routes).toContain('orders');
+        expect(routes).not.toContain('admin');
+        expect(routes).not.toContain('finance');
+        expect(routes).not.toContain('dashboard');
+    });
+
+    test('store manager sees ops surfaces but not admin', () => {
+        const labels = labelsForRole(router.ROLES.STORE_MANAGER);
         expect(labels).toContain('Dashboard');
-        expect(labels).toContain('My Orders');
-        expect(labels).toContain('Kiosk');
+        expect(labels).toContain('Finance');
+        expect(labels).toContain('Environmental');
+        expect(labels).toContain('Cleansing');
+        expect(labels).toContain('Audit Logs');
         expect(labels).not.toContain('Admin');
     });
 
-    test('front desk sees Orders and Cleansing', () => {
-        const items = navigation.MENU_CONFIG[router.ROLES.FRONT_DESK];
-        const labels = items.map(i => i.label);
+    test('finance sees finance + audit + orders only', () => {
+        const labels = labelsForRole(router.ROLES.FINANCE);
+        expect(labels).toContain('Finance');
+        expect(labels).toContain('Audit Logs');
         expect(labels).toContain('Orders');
-        expect(labels).toContain('Cleansing');
         expect(labels).not.toContain('Admin');
+        expect(labels).not.toContain('Dashboard');
     });
 
-    test('technician sees Technician Queue', () => {
-        const items = navigation.MENU_CONFIG[router.ROLES.TECHNICIAN];
-        const labels = items.map(i => i.label);
-        expect(labels).toContain('Technician Queue');
-        expect(labels).not.toContain('Admin');
-        expect(labels).not.toContain('Finance');
-    });
-
-    test('store manager sees Finance and Environmental', () => {
-        const items = navigation.MENU_CONFIG[router.ROLES.STORE_MANAGER];
-        const labels = items.map(i => i.label);
-        expect(labels).toContain('Finance');
-        expect(labels).toContain('Environmental');
-        expect(labels).toContain('Audit Logs');
-    });
-
-    test('finance sees Finance and Audit Logs', () => {
-        const items = navigation.MENU_CONFIG[router.ROLES.FINANCE];
-        const labels = items.map(i => i.label);
-        expect(labels).toContain('Finance');
-        expect(labels).toContain('Audit Logs');
-    });
-
-    test('administrator sees all admin menus', () => {
-        const items = navigation.MENU_CONFIG[router.ROLES.ADMINISTRATOR];
-        const labels = items.map(i => i.label);
-        expect(labels).toContain('Admin');
-        expect(labels).toContain('Environmental');
-        expect(labels).toContain('Cleansing');
-        expect(labels).toContain('Audit Logs');
-        expect(labels).toContain('Kiosk');
+    test('administrator sees every menu item', () => {
+        const labels = labelsForRole(router.ROLES.ADMINISTRATOR);
+        ['Dashboard', 'Orders', 'Technician Queue', 'Finance',
+         'Admin', 'Environmental', 'Cleansing', 'Audit Logs',
+         'Kiosk'].forEach(function (l) {
+            expect(labels).toContain(l);
+        });
     });
 });
 
-describe('Navigation Component - getMenuItems', () => {
-    beforeEach(() => {
-        store.clear();
+describe('Navigation - MENU_ITEMS catalog shape', () => {
+    test('every catalog entry has label, route, icon', () => {
+        navigation.MENU_ITEMS.forEach(function (item) {
+            expect(item.route).toBeTruthy();
+            expect(item.icon).toBeTruthy();
+            expect(item.label).toBeTruthy();
+        });
     });
 
-    test('returns items for customer', () => {
-        store.setRoles([router.ROLES.CUSTOMER]);
-        const items = navigation.getMenuItems();
-        expect(items.length).toBeGreaterThan(0);
+    test('every catalog entry maps to a real router route', () => {
+        navigation.MENU_ITEMS.forEach(function (item) {
+            expect(router.findRoute(item.route)).not.toBeNull();
+        });
+    });
+});
+
+describe('Navigation - getMenuItems', () => {
+    beforeEach(() => {
+        store.clear();
     });
 
     test('returns empty for no roles', () => {
@@ -93,30 +130,9 @@ describe('Navigation Component - getMenuItems', () => {
         expect(navigation.getMenuItems()).toEqual([]);
     });
 
-    test('deduplicates items for multi-role user', () => {
+    test('de-duplicates items for multi-role user', () => {
         store.setRoles([router.ROLES.ADMINISTRATOR, router.ROLES.STORE_MANAGER]);
-        const items = navigation.getMenuItems();
-        const routes = items.map(i => i.route);
+        const routes = navigation.getMenuItems().map(function (i) { return i.route; });
         expect(routes.length).toBe([...new Set(routes)].length);
-    });
-});
-
-describe('Navigation Component - CSS Classes', () => {
-    test('roleToCssClass maps all roles', () => {
-        expect(navigation.roleToCssClass(router.ROLES.CUSTOMER)).toBe('menu-role-customer');
-        expect(navigation.roleToCssClass(router.ROLES.FRONT_DESK)).toBe('menu-role-frontdesk');
-        expect(navigation.roleToCssClass(router.ROLES.TECHNICIAN)).toBe('menu-role-technician');
-        expect(navigation.roleToCssClass(router.ROLES.STORE_MANAGER)).toBe('menu-role-storemanager');
-        expect(navigation.roleToCssClass(router.ROLES.FINANCE)).toBe('menu-role-finance');
-        expect(navigation.roleToCssClass(router.ROLES.ADMINISTRATOR)).toBe('menu-role-administrator');
-    });
-
-    test('unknown role returns empty string', () => {
-        expect(navigation.roleToCssClass('unknown')).toBe('');
-    });
-
-    test('getPrimaryRoleClass returns highest privilege', () => {
-        store.setRoles([router.ROLES.CUSTOMER, router.ROLES.ADMINISTRATOR]);
-        expect(navigation.getPrimaryRoleClass()).toBe('menu-role-administrator');
     });
 });

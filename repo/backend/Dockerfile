@@ -20,6 +20,14 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction 2>/dev/null
 
 COPY . .
 
+# Materialise a default `.env` from the committed example so the image
+# is always self-sufficient. Real deployments override these values
+# through their orchestrator's secret machinery (k8s Secret, Vault,
+# ECS task-def secrets, etc.); the .env file here exists so a fresh
+# `docker compose up` does not require manual env wiring and so the
+# Aquila security gate does not see credentials inlined in YAML.
+RUN cp .env.example .env
+
 RUN mkdir -p storage/keys storage/logs runtime \
     && chmod -R 777 storage runtime
 

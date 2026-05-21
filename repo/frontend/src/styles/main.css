@@ -321,12 +321,122 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Shared page chrome
+   Pages had been emitting bespoke inline styles for the same patterns
+   (top filter row, action button group, page heading, table card),
+   which is why horizontal toolbars sat at slightly different heights
+   and the orders table's surrounding chrome looked off vs. finance /
+   admin. Centralise here so every page picks up the same spacing.
+   --------------------------------------------------------------------------- */
+
+.fieldops-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fieldops-page-header h2,
+.fieldops-page-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.fieldops-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Filter bar: every "Search / Reset" row across orders / finance /
+   environmental / cleansing / audit etc. should sit on one baseline.
+   Layui's stock .layui-form-label is floated and 80px wide, which
+   stacks awkwardly inside a flex row, so we normalise label width
+   and force a 38px control height (matches .layui-input default). */
+.fieldops-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+}
+
+.fieldops-filter-bar .filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fieldops-filter-bar .filter-field > label {
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.fieldops-filter-bar .filter-field .layui-input,
+.fieldops-filter-bar .filter-field .layui-select,
+.fieldops-filter-bar .filter-field select {
+  height: 32px;
+  line-height: 32px;
+  min-width: 140px;
+}
+
+.fieldops-filter-bar .filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+/* Table card: a consistent white surface with the same padding all
+   tables sit inside. */
+.fieldops-table-card {
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 4px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.fieldops-table-card .layui-table {
+  margin: 0;
+}
+
+.fieldops-pagination-wrap {
+  padding: 12px 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.fieldops-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.fieldops-error {
+  text-align: center;
+  padding: 40px 20px;
+  color: #ff5722;
+}
+
+/* ---------------------------------------------------------------------------
    Utility
    --------------------------------------------------------------------------- */
 
 .text-center { text-align: center; }
 .text-right  { text-align: right; }
 .mt-10 { margin-top: 10px; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
 .mt-20 { margin-top: 20px; }
 .mb-10 { margin-bottom: 10px; }
 .mb-20 { margin-bottom: 20px; }

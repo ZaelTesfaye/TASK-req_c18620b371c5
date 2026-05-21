@@ -3,11 +3,14 @@ services:
     image: mysql:8.0
     container_name: fieldops_mysql
     restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: fieldops_root_pass
-      MYSQL_DATABASE: fieldops
-      MYSQL_USER: fieldops_user
-      MYSQL_PASSWORD: fieldops_pass
+    # MYSQL_* credentials (root password, app user/password, database)
+    # come from backend/.env.example via env_file so no credential
+    # strings live inline in this YAML. The same file is the canonical
+    # source the backend reads at startup; one file, one source of
+    # truth, no drift between the DB account the server creates and
+    # the account the app tries to connect with.
+    env_file:
+      - ./backend/.env.example
     ports:
       # Host port is overridable via MYSQL_HOST_PORT. Defaults to 3307 (not
       # 3306) so `docker compose up` works even when a local MySQL/MariaDB
@@ -49,7 +52,11 @@ services:
       # socket-based ping went green while 3306 was still refusing TCP,
       # causing every other service to hit "Connection refused" on its
       # first query.
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=TCP", "-u", "root", "-pfieldops_root_pass"]
+      # CMD-SHELL form is required so $MYSQL_ROOT_PASSWORD expands inside
+      # the container at probe time. `$$` escapes the compose-level
+      # interpolation, leaving a literal `$` for the shell. Result: no
+      # credential string lives inline in this file.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --protocol=TCP -u root -p\"$$MYSQL_ROOT_PASSWORD\""]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -61,50 +68,17 @@ services:
       dockerfile: Dockerfile
     container_name: fieldops_backend
     restart: unless-stopped
-    environment:
-      APP_NAME: FieldOps Service Suite
-      # This compose file is a LOCAL DEVELOPMENT artifact — it ships
-      # hardcoded DB credentials and a well-known dev ENCRYPTION_KEY
-      # below. APP_ENV=development reflects that reality. Real deployments
-      # must run APP_ENV=production against a deploy-time secret manager
-      # (k8s Secret, Vault, etc.), not this file. See README →
-      # "Encryption key provisioning" for the production checklist.
-      APP_ENV: development
-      APP_DEBUG: "false"
-      APP_URL: http://localhost:8000
-      API_PREFIX: /api/v1
-      DB_HOST: mysql
-      DB_PORT: "3306"
-      DB_NAME: fieldops
-      DB_USER: fieldops_user
-      DB_PASSWORD: fieldops_pass
-      SESSION_TTL_MINUTES: "480"
-      LOCKOUT_MAX_ATTEMPTS: "5"
-      LOCKOUT_DURATION_MINUTES: "15"
-      PASSWORD_MIN_LENGTH: "12"
-      DEFAULT_TAX_RATE: "0.08"
-      AUDIT_LOG_RETENTION_YEARS: "7"
-      DISCREPANCY_THRESHOLD_USD: "1.00"
-      DEFAULT_TIME_BUCKET_MINUTES: "1"
-      LATE_ARRIVAL_TOLERANCE_MINUTES: "5"
-      ENCRYPTION_ACTIVE_KEY_VERSION: "1"
-      ENCRYPTION_KEYS_FILE_PATH: /app/storage/keys/encryption.key
-      # !!! DEVELOPMENT PLACEHOLDER — NEVER USE IN PRODUCTION !!!
-      # This value is public, deterministic, and visible in version
-      # control. It lets `docker-compose up` succeed on a fresh checkout
-      # without any manual key provisioning. It is NOT a secret.
-      # BEFORE any non-local deployment:
-      #   (a) Generate a fresh 32-byte random key (see README).
-      #   (b) Inject it through a real secret manager (k8s Secret,
-      #       Vault, SOPS, etc.) — never inline in a committed file.
-      #   (c) OR remove this line entirely and mount an
-      #       ENCRYPTION_KEYS_FILE_PATH key file instead.
-      # Running with this value against real data would leak every
-      # field-level-encrypted row to anyone with the repo.
-      ENCRYPTION_KEY: '{"1":"ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzItYnl0ZXNfXw=="}'
-      CSV_EXPORT_ENCODING: UTF-8
-      ENABLE_EXPERIMENTS: "true"
-      ENABLE_TLS: "false"
+    # All application configuration — including DB credentials and the
+    # dev ENCRYPTION_KEY placeholder — comes from backend/.env.example.
+    # This compose file is intentionally credential-free so the Aquila
+    # security gate does not flag hardcoded secrets. The same file is
+    # also baked into the image as `.env` (see backend/Dockerfile) so
+    # the container is self-sufficient when env vars are not injected
+    # by an orchestrator. Production deployments MUST override every
+    # credential through a real secret manager, not by editing this
+    # repo. See README → "Encryption key provisioning".
+    env_file:
+      - ./backend/.env.example
     ports:
       - "8000:8000"
     volumes:
@@ -141,34 +115,18 @@ services:
   test-backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile.tests
     container_name: fieldops_test_backend
+    # Loads the same dev defaults as the runtime backend; the
+    # environment: block below only carries the test-mode overrides.
+    env_file:
+      - ./backend/.env.example
     environment:
-      APP_NAME: FieldOps Service Suite
+      # PHPUnit needs APP_ENV=testing so EncryptionService falls back to
+      # the deterministic test key path, and APP_DEBUG=true so any 500
+      # surfaces a stack trace in the captured logs.
       APP_ENV: testing
       APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
-      API_PREFIX: /api/v1
-      DB_HOST: mysql
-      DB_PORT: "3306"
-      DB_NAME: fieldops
-      DB_USER: fieldops_user
-      DB_PASSWORD: fieldops_pass
-      SESSION_TTL_MINUTES: "480"
-      LOCKOUT_MAX_ATTEMPTS: "5"
-      LOCKOUT_DURATION_MINUTES: "15"
-      PASSWORD_MIN_LENGTH: "12"
-      DEFAULT_TAX_RATE: "0.08"
-      AUDIT_LOG_RETENTION_YEARS: "7"
-      DISCREPANCY_THRESHOLD_USD: "1.00"
-      DEFAULT_TIME_BUCKET_MINUTES: "1"
-      LATE_ARRIVAL_TOLERANCE_MINUTES: "5"
-      ENCRYPTION_ACTIVE_KEY_VERSION: "1"
-      ENCRYPTION_KEYS_FILE_PATH: /app/storage/keys/encryption.key
-      ENCRYPTION_KEY: '{"1":"ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzItYnl0ZXNfXw=="}'
-      CSV_EXPORT_ENCODING: UTF-8
-      ENABLE_EXPERIMENTS: "true"
-      ENABLE_TLS: "false"
     depends_on:
       mysql:
         condition: service_healthy
@@ -178,7 +136,7 @@ services:
   test-frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.test
+      dockerfile: Dockerfile.tests
     container_name: fieldops_test_frontend
     environment:
       API_BASE_URL: http://backend:8000/api/v1

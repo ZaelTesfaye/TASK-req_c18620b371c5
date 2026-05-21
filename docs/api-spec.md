@@ -2,7 +2,7 @@
 
 Base URL: `/api/v1`
 
-This document covers all external-facing endpoints defined in `backend/route/api.php`.
+This document covers all external-facing endpoints defined in `repo/backend/route/api.php`.
 
 ## Global Conventions
 

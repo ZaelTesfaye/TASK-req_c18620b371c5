@@ -13,7 +13,7 @@ var dateUtil = require('../utils/date');
  */
 function fetchQueue(listContainer) {
   listContainer.innerHTML =
-    '<div style="text-align:center;padding:40px;">' +
+    '<div class="fieldops-empty">' +
       '<i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size:30px;"></i>' +
     '</div>';
 
@@ -28,7 +28,7 @@ function fetchQueue(listContainer) {
 
     if (jobs.length === 0) {
       listContainer.innerHTML =
-        '<div style="text-align:center;padding:40px;color:#999;">' +
+        '<div class="fieldops-empty">' +
           'No jobs assigned to you at this time.' +
         '</div>';
       return;
@@ -37,7 +37,7 @@ function fetchQueue(listContainer) {
     renderJobList(listContainer, jobs);
   }).catch(function (err) {
     listContainer.innerHTML =
-      '<div style="text-align:center;padding:40px;color:#FF5722;">' +
+      '<div class="fieldops-error">' +
         'Failed to load queue: ' + (err.message || 'Unknown error') +
       '</div>';
   });

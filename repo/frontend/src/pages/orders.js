@@ -36,48 +36,41 @@ function canCreateOrder() {
  * Build the filter bar HTML.
  */
 function buildFilterBar() {
-  var html =
-    '<form class="layui-form" lay-filter="orders-filter-form" style="margin-bottom:16px;">' +
-      '<div class="layui-form-item" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">' +
-        '<div class="layui-inline">' +
-          '<label class="layui-form-label" style="width:auto;padding:0 10px 0 0;">Status</label>' +
-          '<div class="layui-input-inline" style="width:140px;">' +
-            '<select name="status" lay-filter="orders-status-filter">' +
-              '<option value="">All</option>' +
-              '<option value="draft">Draft</option>' +
-              '<option value="confirmed">Confirmed</option>' +
-              '<option value="assigned">Assigned</option>' +
-              '<option value="in_progress">In Progress</option>' +
-              '<option value="completed">Completed</option>' +
-              '<option value="cancelled">Cancelled</option>' +
-            '</select>' +
-          '</div>' +
-        '</div>' +
-        '<div class="layui-inline">' +
-          '<label class="layui-form-label" style="width:auto;padding:0 10px 0 0;">Order No.</label>' +
-          '<div class="layui-input-inline" style="width:160px;">' +
-            '<input type="text" name="order_no" id="orders-filter-order-no" class="layui-input" placeholder="Order number">' +
-          '</div>' +
-        '</div>' +
-        '<div class="layui-inline">' +
-          '<label class="layui-form-label" style="width:auto;padding:0 10px 0 0;">From</label>' +
-          '<div class="layui-input-inline" style="width:140px;">' +
-            '<input type="text" name="date_from" id="orders-filter-date-from" class="layui-input" placeholder="MM/DD/YYYY">' +
-          '</div>' +
-        '</div>' +
-        '<div class="layui-inline">' +
-          '<label class="layui-form-label" style="width:auto;padding:0 10px 0 0;">To</label>' +
-          '<div class="layui-input-inline" style="width:140px;">' +
-            '<input type="text" name="date_to" id="orders-filter-date-to" class="layui-input" placeholder="MM/DD/YYYY">' +
-          '</div>' +
-        '</div>' +
-        '<div class="layui-inline">' +
-          '<button type="button" class="layui-btn layui-btn-sm" id="orders-filter-btn">Search</button>' +
-          '<button type="button" class="layui-btn layui-btn-sm layui-btn-primary" id="orders-reset-btn">Reset</button>' +
-        '</div>' +
+  // Uses the shared .fieldops-filter-bar layout (see styles/main.css)
+  // so this row aligns with the toolbars on every other page. The
+  // earlier inline styles overrode .layui-form-label width which made
+  // the labels float at a different baseline than the inputs.
+  return '' +
+    '<form class="layui-form fieldops-filter-bar" lay-filter="orders-filter-form">' +
+      '<div class="filter-field">' +
+        '<label>Status</label>' +
+        '<select name="status" lay-filter="orders-status-filter">' +
+          '<option value="">All</option>' +
+          '<option value="draft">Draft</option>' +
+          '<option value="confirmed">Confirmed</option>' +
+          '<option value="assigned">Assigned</option>' +
+          '<option value="in_progress">In Progress</option>' +
+          '<option value="completed">Completed</option>' +
+          '<option value="cancelled">Cancelled</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="filter-field">' +
+        '<label>Order No.</label>' +
+        '<input type="text" name="order_no" id="orders-filter-order-no" class="layui-input" placeholder="Order number">' +
+      '</div>' +
+      '<div class="filter-field">' +
+        '<label>From</label>' +
+        '<input type="text" name="date_from" id="orders-filter-date-from" class="layui-input" placeholder="MM/DD/YYYY">' +
+      '</div>' +
+      '<div class="filter-field">' +
+        '<label>To</label>' +
+        '<input type="text" name="date_to" id="orders-filter-date-to" class="layui-input" placeholder="MM/DD/YYYY">' +
+      '</div>' +
+      '<div class="filter-actions">' +
+        '<button type="button" class="layui-btn layui-btn-sm" id="orders-filter-btn">Search</button>' +
+        '<button type="button" class="layui-btn layui-btn-sm layui-btn-primary" id="orders-reset-btn">Reset</button>' +
       '</div>' +
     '</form>';
-  return html;
 }
 
 /**
@@ -108,7 +101,7 @@ function fetchOrders(tableContainer, paginationContainer) {
   if (_filters.date_from) params.from = _filters.date_from;
   if (_filters.date_to) params.to = _filters.date_to;
 
-  tableContainer.innerHTML = '<div style="text-align:center;padding:40px;"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size:30px;"></i></div>';
+  tableContainer.innerHTML = '<div class="fieldops-empty"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size:30px;"></i></div>';
 
   api.get('/orders', params).then(function (res) {
     var data = res.data;
@@ -116,7 +109,7 @@ function fetchOrders(tableContainer, paginationContainer) {
     var total = data.total || orders.length;
 
     if (orders.length === 0) {
-      tableContainer.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">No orders found.</div>';
+      tableContainer.innerHTML = '<div class="fieldops-empty">No orders found.</div>';
       paginationContainer.innerHTML = '';
       return;
     }
@@ -157,7 +150,7 @@ function fetchOrders(tableContainer, paginationContainer) {
     // Bind row action buttons
     bindRowActions(tableContainer);
   }).catch(function (err) {
-    tableContainer.innerHTML = '<div style="text-align:center;padding:40px;color:#FF5722;">Failed to load orders: ' + (err.message || 'Unknown error') + '</div>';
+    tableContainer.innerHTML = '<div class="fieldops-error">Failed to load orders: ' + (err.message || 'Unknown error') + '</div>';
   });
 }
 
@@ -528,16 +521,24 @@ function render(container) {
 
   var html = '';
 
-  // Create order button (role-gated)
-  if (canCreateOrder()) {
-    html += '<div style="margin-bottom:16px;">' +
-      '<button class="layui-btn" id="orders-create-btn"><i class="layui-icon layui-icon-add-1"></i> Create Order</button>' +
-    '</div>';
-  }
+  // Page header band: title + (optional) Create Order action on the
+  // right, aligned with the page-header pattern used elsewhere.
+  html += '<div class="fieldops-page-header">' +
+            '<h2>Orders</h2>' +
+            '<div class="fieldops-page-actions">' +
+              (canCreateOrder()
+                ? '<button class="layui-btn" id="orders-create-btn"><i class="layui-icon layui-icon-add-1"></i> Create Order</button>'
+                : '') +
+            '</div>' +
+          '</div>';
 
   html += buildFilterBar();
-  html += '<div id="orders-table-body"></div>';
-  html += '<div id="orders-pagination-wrap"></div>';
+  // Wrap the table + pagination in a single card so the table sits on
+  // a framed white surface instead of floating on the page background.
+  html += '<div class="fieldops-table-card">' +
+            '<div id="orders-table-body"></div>' +
+            '<div id="orders-pagination-wrap" class="fieldops-pagination-wrap"></div>' +
+          '</div>';
 
   container.innerHTML = html;
 

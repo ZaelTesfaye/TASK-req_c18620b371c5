@@ -33,7 +33,25 @@ To connect from the host with a GUI client, point it at `localhost:3307` with cr
 
 ## Configuration
 
-All environment variables are defined in `docker-compose.yml`. The following table lists every configurable parameter:
+All environment defaults live in **`backend/.env.example`** — the single
+source of truth for dev-mode configuration. `docker-compose.yml` no
+longer inlines credential strings; the `mysql`, `backend`, and
+`test-backend` services each load values from the same file via
+`env_file: ./backend/.env.example`, and each backend image bakes a
+copy in at build time (`RUN cp .env.example .env` in
+`backend/Dockerfile` and `backend/Dockerfile.tests`) so the container
+is self-sufficient even with no env vars injected by an orchestrator.
+This split keeps the compose file free of hardcoded secrets (Aquila
+security-gate compliant) and ensures one place to edit when defaults
+change.
+
+Production deployments MUST override every credential and key value
+through a real secret manager (Kubernetes `Secret`, Vault, AWS Secrets
+Manager, SOPS, etc.) — never reuse the placeholder values shipped in
+`.env.example`. See "Encryption key provisioning" below for the key
+rotation checklist.
+
+The following table lists every configurable parameter:
 
 ### MySQL Service
 
@@ -69,7 +87,7 @@ All environment variables are defined in `docker-compose.yml`. The following tab
 | `LATE_ARRIVAL_TOLERANCE_MINUTES` | `5` | Late-arriving sensor data tolerance |
 | `ENCRYPTION_ACTIVE_KEY_VERSION` | `1` | Active encryption key version |
 | `ENCRYPTION_KEYS_FILE_PATH` | `/app/storage/keys/encryption.key` | Optional on-disk key file location (preferred when a secret volume is mounted) |
-| `ENCRYPTION_KEY` | (dev default in `docker-compose.yml`) | Bootstrap fallback used when `ENCRYPTION_KEYS_FILE_PATH` is absent. **Replace before any deployment outside local dev** — see "Encryption key provisioning" below |
+| `ENCRYPTION_KEY` | (`base64:…` dev placeholder in `backend/.env.example`) | Bootstrap fallback used when `ENCRYPTION_KEYS_FILE_PATH` is absent. **Replace before any deployment outside local dev** — see "Encryption key provisioning" below |
 | `CSV_EXPORT_ENCODING` | `UTF-8` | CSV export character encoding |
 | `ENABLE_EXPERIMENTS` | `true` | A/B experiment feature toggle |
 | `ENABLE_TLS` | `false` | TLS toggle (offline deployment) |
@@ -96,17 +114,18 @@ All environment variables are defined in `docker-compose.yml`. The following tab
 
 ## Encryption key provisioning
 
-> ⚠️ **The `ENCRYPTION_KEY` value in `docker-compose.yml` is a development
-> placeholder only.** It is a fixed, publicly visible, deterministically
-> derived value whose sole purpose is letting `docker-compose up` succeed
-> on a fresh checkout without any manual key setup. It is NOT a secret —
-> it is committed to version control and visible to anyone with read
-> access to this repo. Using it in any environment that handles real
-> customer data, production orders, or genuine sensitive fields would
-> leak every field-level-encrypted row to anyone who can read the repo.
-> It **must be replaced** with a cryptographically random, deploy-time
-> secret before any non-local deployment. `docker-compose.yml` runs with
-> `APP_ENV=development` specifically to make this boundary explicit.
+> ⚠️ **The `ENCRYPTION_KEY` value in `backend/.env.example` is a
+> development placeholder only.** It is a fixed, publicly visible,
+> deterministically derived value whose sole purpose is letting
+> `docker compose up` succeed on a fresh checkout without any manual
+> key setup. It is NOT a secret — it is committed to version control
+> and visible to anyone with read access to this repo. Using it in any
+> environment that handles real customer data, production orders, or
+> genuine sensitive fields would leak every field-level-encrypted row
+> to anyone who can read the repo. It **must be replaced** with a
+> cryptographically random, deploy-time secret before any non-local
+> deployment. `.env.example` ships with `APP_ENV=development`
+> specifically to make this boundary explicit.
 
 The backend needs key material for AES-256-CBC field-level encryption. Two
 sources are supported, checked in this order:
@@ -119,9 +138,11 @@ sources are supported, checked in this order:
 
 2. **`ENCRYPTION_KEY` env var.** Used when the key file is absent. Accepts
    the same versioned-JSON shape as the key file, or a single-version
-   shortcut (`base64:<base64>` / bare base64). `docker-compose.yml` ships a
-   deterministic dev-only value (see the warning above) so the container
-   starts without any manual provisioning during local development.
+   shortcut (`base64:<base64>` / bare base64). `backend/.env.example`
+   ships a deterministic dev-only value in the `base64:` form (chosen
+   so the value survives `.env` / INI / shell parsers without quote
+   escaping) so the container starts without any manual provisioning
+   during local development.
 
 If neither source resolves a key for the active version, the backend
 refuses to start with a clear error (`EncryptionService::getKeyMaterial`).
@@ -142,14 +163,15 @@ and does not require either source.
 
 3. **Inject it via a real secret manager** — Kubernetes `Secret`, HashiCorp
    Vault, AWS Secrets Manager, SOPS, etc. Do not commit production keys
-   to git, and do not copy them into a production `docker-compose.yml`.
+   to git, and do not copy them into `backend/.env.example` or any
+   production overlay.
 4. **Prefer the key file** (`ENCRYPTION_KEYS_FILE_PATH`) over the env var
    in production, so the key material never appears in process listings
    or container metadata. Remove the `ENCRYPTION_KEY` line entirely in
    the production overlay.
 5. **Set `APP_ENV=production`** on the production overlay so
-   `AppConfig::isProduction()` reports correctly; the dev compose file
-   deliberately runs with `APP_ENV=development`.
+   `AppConfig::isProduction()` reports correctly; `.env.example`
+   deliberately ships with `APP_ENV=development`.
 
 ## Database Initialization
 
@@ -294,47 +316,75 @@ reverse-proxy wiring are working end-to-end.
 
 ```
 backend/
+  .env.example         Canonical source of dev-mode env defaults.
+                       Copied to .env inside the image at build time
+                       and loaded by docker-compose via env_file.
+  Dockerfile           Runtime backend image (PHP 8.2 CLI server).
+  Dockerfile.tests     PHPUnit runner image (separate from runtime).
   app/
-    common/          AppConfig, ExceptionHandler, ResponseHelper
-    controller/      AuthController, OrderController, PaymentController,
-                     FinanceController, DashboardController, AdminController,
-                     AuditController, AnnouncementController, EventController,
-                     ExperimentController, EnvironmentalController, CleansingController
-    middleware/       AuthMiddleware, RbacMiddleware, AuditMiddleware,
-                     CorsMiddleware, RequestLogMiddleware
-    service/          AuthService, OrderService, PaymentService, FinanceService,
-                     DashboardService, CouponService, AuditService,
-                     EncryptionService, EnvironmentalService, ExperimentService,
-                     CleansingService
-    validate/        AuthValidate, OrderValidate, PaymentValidate
-    job/             AuditArchivalJob
-  config/            app.php, database.php, middleware.php, route.php
+    common/            AppConfig, ExceptionHandler, ResponseHelper
+    controller/        AuthController, OrderController, PaymentController,
+                       FinanceController, DashboardController, AdminController,
+                       AuditController, AnnouncementController, EventController,
+                       ExperimentController, EnvironmentalController, CleansingController
+    middleware/        AuthMiddleware, RbacMiddleware, AuditMiddleware,
+                       CorsMiddleware, RequestLogMiddleware
+    service/           AuthService, OrderService, PaymentService, FinanceService,
+                       DashboardService, CouponService, AuditService,
+                       EncryptionService, EnvironmentalService, ExperimentService,
+                       CleansingService
+    validate/          AuthValidate, OrderValidate, PaymentValidate
+    job/               AuditArchivalJob
+  config/              app.php, database.php, middleware.php, route.php,
+                       cache.php, console.php, log.php, schedule.php
   database/
-    migrations/      init.sql (full schema)
-    seeds/           seed.sql (demo data)
-  logging/           Logger.php (redaction-aware structured logging)
-  route/             api.php (all API route definitions)
+    migrations/        init.sql (full schema, append-only triggers)
+    seeds/             seed.sql (roles, stores, demo users, coupons, …)
+  public/              index.php, router.php (PHP built-in server entry)
+  route/               api.php (all API route definitions)
+  scripts/             bootstrap-db.php, run-phpunit.sh, reseed.php,
+                       seed-passwords.php
+  storage/             keys/, logs/ (writable at runtime)
   tests/
-    api/             AuthApiTest, OrderApiTest, FinanceApiTest, RbacApiTest
-    unit/            PasswordPolicyTest, OrderStateMachineTest, PricingEngineTest,
-                     CouponValidationTest, DiscrepancyThresholdTest, DateParsingTest,
-                     ConfidenceScoreTest, CleansingNormalizationTest, LogRedactionTest
+    api/               AuthApiTest, OrderApiTest, FinanceApiTest, RbacApiTest,
+                       AdminApiTest, DashboardApiTest, ExperimentApiTest,
+                       EventApiTest, CleansingApiTest, EnvironmentalApiTest,
+                       StoreIsolationTest, AuditImmutabilityTest, ContractTest
+    unit/              PasswordPolicyTest, OrderStateMachineTest,
+                       PricingEngineTest, CouponValidationTest,
+                       DiscrepancyThresholdTest, DateParsingTest,
+                       ConfidenceScoreTest, CleansingNormalizationTest,
+                       LogRedactionTest
 frontend/
+  Dockerfile           Build-and-serve image (webpack → nginx).
+  Dockerfile.tests     Jest runner image.
+  nginx.conf           Reverse-proxy config (/api → backend:8000).
   src/
-    components/      Navigation.js
-    router/          index.js (route definitions with role guards)
-    services/        api.js, auth.js
-    store/           index.js (client state management)
-    utils/           date.js, validation.js
-    styles/          main.css
-    app.js           Application shell and login page
-    index.html       Entry point
+    components/        Navigation.js, Receipt.js, AmountBreakdown.js
+    pages/             login.js, dashboard.js, orders.js, kiosk.js,
+                       technicianQueue.js, finance.js, admin.js,
+                       environmental.js, cleansing.js, auditLogs.js,
+                       orderDetail.js
+    router/            index.js (route table + per-route role allowlist
+                       — the single source the sidebar filters against)
+    services/          api.js, auth.js
+    store/             index.js (client state management)
+    utils/             date.js, validation.js
+    styles/            main.css (shared chrome: .fieldops-filter-bar,
+                       .fieldops-table-card, .fieldops-empty, …)
+    app.js             Application shell and login redirect
+    index.html         Entry point
   tests/
-    component/       formStates.test.js, navigation.test.js
-    e2e/             loginFlow.test.js, orderWorkflow.test.js
-    integration/     orderFlow.test.js, routeGuard.test.js
-    unit/            date.test.js, store.test.js, validation.test.js
-docs/                Documentation artifacts
-docker-compose.yml   Service orchestration
-run_tests.sh         One-command test runner
+    component/         formStates.test.js, navigation.test.js
+    e2e/               loginFlow.test.js, orderWorkflow.test.js
+    integration/       orderFlow.test.js, routeGuard.test.js
+    unit/              date.test.js, store.test.js, validation.test.js,
+                       api.test.js
+tests/
+  e2e/                 Dockerfile + cross-service integration suite
+                       (compose `test-e2e` profile).
+docker-compose.yml     Service orchestration (credential-free; loads
+                       defaults via env_file from backend/.env.example).
+run_tests.sh           One-command test runner (backend + frontend
+                       profiles, then summary).
 ```

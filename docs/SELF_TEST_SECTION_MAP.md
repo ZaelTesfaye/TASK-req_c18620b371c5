@@ -18,34 +18,34 @@ Pre-maps implementation evidence to each required reviewer output section.
 
 ## 3. Prompt/Repository Mapping
 
-- `REQUIREMENTS_TRACEABILITY.md` maps prompt → code → tests
+- `docs/PROMPT_CLAUSE_CHECKLIST.md` maps prompt clauses to code and tests
 - `docs/PROMPT_CLAUSE_CHECKLIST.md` maps every clause with status = `implemented`
 
 ## 4. High/Blocker Coverage Panel
 
 ### A. Authentication and Security
-- **Evidence:** `backend/app/service/AuthService.php`, `backend/app/middleware/AuthMiddleware.php`
-- **Tests:** `backend/tests/api/AuthApiTest.php`, `backend/tests/unit/PasswordPolicyTest.php`
+- **Evidence:** `repo/backend/app/service/AuthService.php`, `repo/backend/app/middleware/AuthMiddleware.php`
+- **Tests:** `repo/backend/tests/api/AuthApiTest.php`, `repo/backend/tests/unit/PasswordPolicyTest.php`
 - **Password policy:** min 12 chars, upper+lower+digit+special
 - **Lockout:** 5 failures → 15-min lockout, account-based, server-side
-- **Encryption:** `backend/app/service/EncryptionService.php`, versioned keys
+- **Encryption:** `repo/backend/app/service/EncryptionService.php`, versioned keys
 
 ### B. Authorization (RBAC)
-- **Evidence:** `backend/app/middleware/RbacMiddleware.php`, `backend/route/api.php`
-- **Tests:** `backend/tests/api/RbacApiTest.php` — 403 coverage for all restricted endpoints
+- **Evidence:** `repo/backend/app/middleware/RbacMiddleware.php`, `repo/backend/route/api.php`
+- **Tests:** `repo/backend/tests/api/RbacApiTest.php` — 403 coverage for all restricted endpoints
 - **Object-level:** Store/workstation isolation in OrderService, FinanceService, DashboardService
 
 ### C. Data Integrity and Business Logic
-- **Order state machine:** `backend/app/service/OrderService.php` — validated transitions, 409 on invalid
+- **Order state machine:** `repo/backend/app/service/OrderService.php` — validated transitions, 409 on invalid
 - **Pricing engine:** Deterministic order: subtotal → discount → tax → total, 2-decimal USD
 - **Reconciliation:** Discrepancy flagged only when `abs(variance) > 1.00`
-- **Tests:** `backend/tests/unit/PricingEngineTest.php`, `backend/tests/unit/DiscrepancyThresholdTest.php`, `backend/tests/unit/OrderStateMachineTest.php`
+- **Tests:** `repo/backend/tests/unit/PricingEngineTest.php`, `repo/backend/tests/unit/DiscrepancyThresholdTest.php`, `repo/backend/tests/unit/OrderStateMachineTest.php`
 
 ### D. Audit and Compliance
-- **Immutable logs:** `backend/app/service/AuditService.php` — append-only, before/after snapshots
-- **Retention:** `backend/app/job/AuditArchivalJob.php` — 7-year policy, no premature deletion
+- **Immutable logs:** `repo/backend/app/service/AuditService.php` — append-only, before/after snapshots
+- **Retention:** `repo/backend/app/job/AuditArchivalJob.php` — 7-year policy, no premature deletion
 - **Searchable:** Filters by user, role, store, workstation, action, entity, time range
-- **Redaction:** `backend/logging/Logger.php` — passwords, tokens, SSNs, taxpayer IDs
+- **Redaction:** `repo/backend/app/logging/Logger.php` — passwords, tokens, SSNs, taxpayer IDs
 
 ### E. Completeness and Coverage
 - **All 6 roles implemented:** Customer, Front Desk, Technician, Store Manager, Finance, Administrator
@@ -84,7 +84,7 @@ All blocker/high dimensions have code evidence + test coverage. No known unaddre
 ## 9. Engineering Quality Summary
 
 - **Architecture:** Controller → Service → Model/DB layering
-- **Config:** Single source of truth via `backend/config/app.php`
+- **Config:** Single source of truth via `repo/backend/config/app.php`
 - **Logging:** Structured `[category][subcategory]` format with auto-redaction
 - **Error handling:** Standardized JSON envelope, no raw stack traces in responses
 - **Validation:** Server-side validators for all critical inputs

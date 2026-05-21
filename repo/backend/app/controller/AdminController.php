@@ -45,6 +45,36 @@ class AdminController
             return json($resp['data'], $resp['code']);
         }
 
+        // Pre-validate role_codes BEFORE inserting the user so an admin
+        // typo doesn't create an orphan account with no roles. Same
+        // contract as updateUserRoles: any unknown code aborts the
+        // whole call with INVALID_ROLE. role_codes is optional on
+        // create, so an empty/missing list is fine and just produces
+        // a user with no assigned roles.
+        $resolvedRoles = [];
+        if (!empty($data['role_codes'])) {
+            if (!is_array($data['role_codes'])) {
+                $resp = ResponseHelper::validationError('role_codes must be an array');
+                return json($resp['data'], $resp['code']);
+            }
+            $requestedCodes = array_values(array_unique(array_map('strval', $data['role_codes'])));
+            $resolvedRoles = Db::table('roles')
+                ->whereIn('code', $requestedCodes)
+                ->field('id,code')
+                ->select()
+                ->toArray();
+            $unknown = array_values(array_diff($requestedCodes, array_column($resolvedRoles, 'code')));
+            if (!empty($unknown)) {
+                $resp = ResponseHelper::error(
+                    'INVALID_ROLE',
+                    'Unknown role code(s): ' . implode(', ', $unknown),
+                    400,
+                    ['unknown_roles' => $unknown]
+                );
+                return json($resp['data'], $resp['code']);
+            }
+        }
+
         $passwordHash = AuthService::hashPassword($data['password']);
         $salt = bin2hex(random_bytes(16));
 
@@ -59,17 +89,11 @@ class AdminController
             'updated_at'      => date('Y-m-d H:i:s'),
         ]);
 
-        // Assign roles if provided
-        if (!empty($data['role_codes'])) {
-            foreach ($data['role_codes'] as $roleCode) {
-                $role = Db::table('roles')->where('code', $roleCode)->find();
-                if ($role) {
-                    Db::table('user_roles')->insert([
-                        'user_id' => $userId,
-                        'role_id' => $role['id'],
-                    ]);
-                }
-            }
+        foreach ($resolvedRoles as $role) {
+            Db::table('user_roles')->insert([
+                'user_id' => $userId,
+                'role_id' => $role['id'],
+            ]);
         }
 
         // Create bindings if provided
@@ -118,6 +142,37 @@ class AdminController
             return json($resp['data'], $resp['code']);
         }
 
+        // De-duplicate and coerce to strings so {"role_codes":["admin","admin"]}
+        // doesn't insert twice and accidental numeric ids don't slip past
+        // the code lookup below.
+        $roleCodes = array_values(array_unique(array_map('strval', $roleCodes)));
+
+        // Resolve every submitted code to a real row BEFORE touching
+        // user_roles. The previous implementation deleted the user's
+        // existing roles first and then silently dropped any code that
+        // didn't resolve — so an admin who PATCHed
+        // {"role_codes": ["godking"]} wiped the account's real roles
+        // and the response cheerfully reported `roles: []`. Validate
+        // upfront and 400 on any unknown code so the operation is
+        // either fully applied or rejected with no side effects.
+        $resolved = Db::table('roles')
+            ->whereIn('code', $roleCodes)
+            ->field('id,code')
+            ->select()
+            ->toArray();
+
+        $foundCodes = array_column($resolved, 'code');
+        $unknown    = array_values(array_diff($roleCodes, $foundCodes));
+        if (!empty($unknown)) {
+            $resp = ResponseHelper::error(
+                'INVALID_ROLE',
+                'Unknown role code(s): ' . implode(', ', $unknown),
+                400,
+                ['unknown_roles' => $unknown]
+            );
+            return json($resp['data'], $resp['code']);
+        }
+
         // Get current roles for audit
         $beforeRoles = Db::table('user_roles')
             ->alias('ur')
@@ -125,19 +180,17 @@ class AdminController
             ->where('ur.user_id', $id)
             ->column('r.code');
 
-        // Replace all roles
+        // Replace all roles. Safe to delete now: every submitted code
+        // has been resolved to a row above.
         Db::table('user_roles')->where('user_id', $id)->delete();
 
         $assignedRoles = [];
-        foreach ($roleCodes as $roleCode) {
-            $role = Db::table('roles')->where('code', $roleCode)->find();
-            if ($role) {
-                Db::table('user_roles')->insert([
-                    'user_id' => $id,
-                    'role_id' => $role['id'],
-                ]);
-                $assignedRoles[] = $roleCode;
-            }
+        foreach ($resolved as $role) {
+            Db::table('user_roles')->insert([
+                'user_id' => $id,
+                'role_id' => $role['id'],
+            ]);
+            $assignedRoles[] = $role['code'];
         }
 
         $request->auditData = [

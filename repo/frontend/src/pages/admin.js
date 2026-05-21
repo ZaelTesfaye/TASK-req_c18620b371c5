@@ -4,6 +4,42 @@
  */
 var api = require('../services/api');
 var store = require('../store/index');
+var router = require('../router/index');
+
+/**
+ * Resolve a comma-separated user-typed role list against the canonical
+ * router.ROLES enum. Returns either:
+ *   { ok: true, codes: [...] }   - all entries match a known role
+ *   { ok: false, unknown: [...] } - one or more typos
+ *
+ * Centralising this here keeps the admin UI from posting role codes
+ * the backend will reject with INVALID_ROLE — both layers now agree
+ * on the same closed set (customer, front_desk, technician,
+ * store_manager, finance, administrator). Empty input is treated as
+ * an error because role updates with an empty list are not what an
+ * admin "Enter new roles" prompt is for.
+ */
+function parseRoleInput(raw) {
+    var codes = (raw || '')
+        .split(',')
+        .map(function (r) { return r.trim(); })
+        .filter(Boolean);
+    if (codes.length === 0) {
+        return { ok: false, unknown: [], empty: true };
+    }
+    var known = Object.keys(router.ROLES).map(function (k) { return router.ROLES[k]; });
+    var unknown = codes.filter(function (c) { return known.indexOf(c) === -1; });
+    if (unknown.length > 0) {
+        return { ok: false, unknown: unknown };
+    }
+    return { ok: true, codes: codes };
+}
+
+function knownRolesHint() {
+    return Object.keys(router.ROLES)
+        .map(function (k) { return router.ROLES[k]; })
+        .join(', ');
+}
 
 function render(container) {
     container.innerHTML =
@@ -156,10 +192,25 @@ function renderSecurityTab() {
 // --- Action handlers wired via onclick attributes ---
 
 function editUserRoles(userId) {
-    var newRoles = prompt('Enter new role codes (comma-separated):', 'front_desk');
+    var newRoles = prompt(
+        'Enter new role codes (comma-separated).\nValid: ' + knownRolesHint(),
+        'front_desk'
+    );
     if (newRoles === null) return;
-    var roleCodes = newRoles.split(',').map(function(r) { return r.trim(); }).filter(Boolean);
-    api.patch('admin/users/' + userId + '/roles', { role_codes: roleCodes }).then(function() {
+    var parsed = parseRoleInput(newRoles);
+    if (!parsed.ok) {
+        var msg = parsed.empty
+            ? 'At least one role code is required.'
+            : 'Unknown role code(s): ' + parsed.unknown.join(', ') +
+              '\nValid roles: ' + knownRolesHint();
+        if (typeof layui !== 'undefined' && layui.layer) {
+            layui.layer.msg(msg, { icon: 2 });
+        } else {
+            alert(msg);
+        }
+        return;
+    }
+    api.patch('admin/users/' + userId + '/roles', { role_codes: parsed.codes }).then(function() {
         loadUsers();
         if (typeof layui !== 'undefined' && layui.layer) {
             layui.layer.msg('Roles updated.', { icon: 1 });
@@ -204,8 +255,27 @@ function createUser() {
     if (!username) return;
     var password = prompt('Enter password (min 12 chars, mixed case, digit, special):');
     if (!password) return;
-    var roles = prompt('Enter role codes (comma-separated, e.g. front_desk,technician):', 'front_desk');
-    var roleCodes = roles ? roles.split(',').map(function(r) { return r.trim(); }).filter(Boolean) : [];
+    var roles = prompt(
+        'Enter role codes (comma-separated).\nValid: ' + knownRolesHint(),
+        'front_desk'
+    );
+    // roles is optional on create; only validate if the admin typed
+    // something. An empty value -> the user is created with no roles.
+    var roleCodes = [];
+    if (roles && roles.trim()) {
+        var parsed = parseRoleInput(roles);
+        if (!parsed.ok) {
+            var msg = 'Unknown role code(s): ' + parsed.unknown.join(', ') +
+                      '\nValid roles: ' + knownRolesHint();
+            if (typeof layui !== 'undefined' && layui.layer) {
+                layui.layer.msg(msg, { icon: 2 });
+            } else {
+                alert(msg);
+            }
+            return;
+        }
+        roleCodes = parsed.codes;
+    }
 
     api.post('admin/users', {
         username: username,

@@ -15,15 +15,19 @@ var router = require('../router/index');
  * flow is added later, swap this list for a /auth/bootstrap/users
  * endpoint (currently intentionally not exposed for security).
  */
+// Labels mirror the human-readable names rendered in the Store /
+// Workstation dropdowns so the operator can match them by sight
+// instead of translating opaque "Store 1 / WS 1" IDs. Kept in sync
+// with seed.sql -> stores.name + workstations.name columns.
 var DEMO_USERS = [
-  { username: 'admin',      label: 'admin (Administrator) - Store 1 / WS 1' },
-  { username: 'frontdesk1', label: 'frontdesk1 (Front Desk) - Store 1 / WS 1' },
-  { username: 'tech1',      label: 'tech1 (Technician) - Store 1 / WS 2' },
-  { username: 'manager1',   label: 'manager1 (Store Manager) - Store 1 / WS 1' },
-  { username: 'finance1',   label: 'finance1 (Finance) - Store 1 / WS 1' },
-  { username: 'customer1',  label: 'customer1 (Customer) - Store 1 / WS 3 (Kiosk)' },
-  { username: 'tech2',      label: 'tech2 (Technician) - Store 2 / WS 5' },
-  { username: 'frontdesk2', label: 'frontdesk2 (Front Desk) - Store 2 / WS 4' },
+  { username: 'admin',      label: 'admin (Administrator) - Downtown Service Center / Front Desk Terminal 1' },
+  { username: 'frontdesk1', label: 'frontdesk1 (Front Desk) - Downtown Service Center / Front Desk Terminal 1' },
+  { username: 'tech1',      label: 'tech1 (Technician) - Downtown Service Center / Front Desk Terminal 2' },
+  { username: 'manager1',   label: 'manager1 (Store Manager) - Downtown Service Center / Front Desk Terminal 1' },
+  { username: 'finance1',   label: 'finance1 (Finance) - Downtown Service Center / Front Desk Terminal 1' },
+  { username: 'customer1',  label: 'customer1 (Customer) - Downtown Service Center / Kiosk Station 1' },
+  { username: 'tech2',      label: 'tech2 (Technician) - Midtown Service Hub / Technician Station 1' },
+  { username: 'frontdesk2', label: 'frontdesk2 (Front Desk) - Midtown Service Hub / Front Desk Terminal 1' },
 ];
 
 /**

@@ -225,20 +225,16 @@ function render(container) {
   _dateTo = dateUtil.formatMMDDYYYY(now);
 
   var html =
-    '<div class="layui-form" lay-filter="dashboard-form">' +
-      '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:20px;">' +
-        '<div class="layui-inline">' +
-          '<label class="layui-form-label" style="width:auto;padding:0 10px 0 0;">From</label>' +
-          '<div class="layui-input-inline" style="width:140px;">' +
-            '<input type="text" name="date_from" id="dashboard-date-from" class="layui-input" placeholder="MM/DD/YYYY" value="' + _dateFrom + '">' +
-          '</div>' +
-        '</div>' +
-        '<div class="layui-inline">' +
-          '<label class="layui-form-label" style="width:auto;padding:0 10px 0 0;">To</label>' +
-          '<div class="layui-input-inline" style="width:140px;">' +
-            '<input type="text" name="date_to" id="dashboard-date-to" class="layui-input" placeholder="MM/DD/YYYY" value="' + _dateTo + '">' +
-          '</div>' +
-        '</div>' +
+    '<div class="layui-form fieldops-filter-bar" lay-filter="dashboard-form">' +
+      '<div class="filter-field">' +
+        '<label>From</label>' +
+        '<input type="text" name="date_from" id="dashboard-date-from" class="layui-input" placeholder="MM/DD/YYYY" value="' + _dateFrom + '">' +
+      '</div>' +
+      '<div class="filter-field">' +
+        '<label>To</label>' +
+        '<input type="text" name="date_to" id="dashboard-date-to" class="layui-input" placeholder="MM/DD/YYYY" value="' + _dateTo + '">' +
+      '</div>' +
+      '<div class="filter-actions">' +
         '<button type="button" class="layui-btn layui-btn-sm" id="dashboard-apply-btn">Apply</button>' +
         '<button type="button" class="layui-btn layui-btn-sm layui-btn-warm" id="dashboard-export-btn">' +
           '<i class="layui-icon layui-icon-export"></i> Export CSV' +

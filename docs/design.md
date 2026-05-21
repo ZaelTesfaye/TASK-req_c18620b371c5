@@ -15,28 +15,28 @@ At a high level, the frontend calls `/api/v1/*` endpoints, backend controllers a
 
 The backend follows a layered, role-aware architecture where responsibilities are separated:
 
-1. API Layer (`backend/app/controller` + `backend/route/api.php`)
+1. API Layer (`repo/backend/app/controller` + `repo/backend/route/api.php`)
 
 - Declares routes and HTTP verbs.
 - Applies middleware (`auth`, `rbac`, `audit`) per endpoint.
 - Parses request input and returns standardized responses.
 
-2. Validation Layer (`backend/app/validate`)
+2. Validation Layer (`repo/backend/app/validate`)
 
 - Defines input constraints for auth/order/payment and related flows.
 - Keeps shape checks out of business services.
 
-3. Business Logic Layer (`backend/app/service`)
+3. Business Logic Layer (`repo/backend/app/service`)
 
 - Implements workflows such as order lifecycle, cash-drawer reconciliation, experiment assignment, environmental metric derivation, and cleansing governance.
 - Applies rules like state transitions, store isolation, role-sensitive field controls, and conflict checks.
 
-4. Persistence Layer (`backend/app/model` + ThinkPHP DB)
+4. Persistence Layer (`repo/backend/app/model` + ThinkPHP DB)
 
 - Encapsulates data access for orders, users, operation logs, formulas, cleansing batches, and related entities.
 - Uses MySQL with strict mode enabled and UTF-8 (`utf8mb4`).
 
-5. Cross-Cutting Layer (`backend/app/middleware`, `backend/logging`)
+5. Cross-Cutting Layer (`repo/backend/app/middleware`, `repo/backend/app/logging`)
 
 - `AuthMiddleware`: bearer token session validation.
 - `RbacMiddleware`: role checks per route.
@@ -47,11 +47,11 @@ The backend follows a layered, role-aware architecture where responsibilities ar
 
 ### Root
 
-- `docker-compose.yml`: container topology for app, db, and test profiles.
-- `run_tests.sh`: orchestrated backend and frontend test execution.
-- `README.md`: setup, runtime config, and operational notes.
+- `repo/docker-compose.yml`: container topology for app, db, and test profiles.
+- `repo/run_tests.sh`: orchestrated backend and frontend test execution.
+- `repo/README.md`: setup, runtime config, and operational notes.
 
-### Backend (`backend/`)
+### Backend (`repo/backend/`)
 
 - `app/common`: shared infrastructure (`AppConfig`, `ResponseHelper`, exception handling).
 - `app/controller`: HTTP endpoint handlers grouped by domain.
@@ -65,7 +65,7 @@ The backend follows a layered, role-aware architecture where responsibilities ar
 - `route/api.php`: full external API surface.
 - `tests/api` and `tests/unit`: contract/security and unit-level verification.
 
-### Frontend (`frontend/`)
+### Frontend (`repo/frontend/`)
 
 - `src/pages`: page-level modules by role/workflow.
 - `src/components`: reusable UI components.

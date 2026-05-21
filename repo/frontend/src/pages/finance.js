@@ -24,7 +24,7 @@ function formatUSD(amount) {
  */
 function fetchDrawer(container) {
   container.innerHTML =
-    '<div style="text-align:center;padding:40px;">' +
+    '<div class="fieldops-empty">' +
       '<i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop" style="font-size:30px;"></i>' +
     '</div>';
 
@@ -40,7 +40,7 @@ function fetchDrawer(container) {
     })
     .catch(function (err) {
       container.innerHTML =
-        '<div style="text-align:center;padding:40px;color:#FF5722;">' +
+        '<div class="fieldops-error">' +
           'Failed to load cash drawer: ' + (err.message || 'Unknown error') +
         '</div>';
     });

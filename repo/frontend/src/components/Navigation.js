@@ -4,43 +4,17 @@ var router = require('../router/index');
 var ROLES = router.ROLES;
 
 /**
- * Menu items per role. Each entry: { label, route, icon }.
- * The icon values reference Layui's built-in icon classes.
+ * Flat catalog of every navigable section. Each entry is presentation
+ * only (label + icon); the role allowlist for the matching route lives
+ * in router/index.js and is consulted at render time via
+ * router.hasAccess(). This removes the prior split where MENU_CONFIG
+ * defined its own role -> menu-items mapping that drifted out of sync
+ * with the route table (e.g., FRONT_DESK got a "Cleansing" menu entry
+ * even though the cleansing route is restricted to store_manager +
+ * administrator, so the click immediately 403'd; CUSTOMER got
+ * "Dashboard" the same way). One source of truth = no drift.
  */
-var MENU_CONFIG = {};
-
-MENU_CONFIG[ROLES.CUSTOMER] = [
-  { label: 'Dashboard',   route: 'dashboard',    icon: 'layui-icon-home' },
-  { label: 'My Orders',   route: 'orders',       icon: 'layui-icon-form' },
-  { label: 'Kiosk',       route: 'kiosk',        icon: 'layui-icon-screen-full' },
-];
-
-MENU_CONFIG[ROLES.FRONT_DESK] = [
-  { label: 'Orders',      route: 'orders',       icon: 'layui-icon-form' },
-  { label: 'Kiosk',       route: 'kiosk',        icon: 'layui-icon-screen-full' },
-  { label: 'Cleansing',   route: 'cleansing',    icon: 'layui-icon-refresh-3' },
-];
-
-MENU_CONFIG[ROLES.TECHNICIAN] = [
-  { label: 'Technician Queue', route: 'technician-queue', icon: 'layui-icon-list' },
-];
-
-MENU_CONFIG[ROLES.STORE_MANAGER] = [
-  { label: 'Dashboard',       route: 'dashboard',        icon: 'layui-icon-home' },
-  { label: 'Orders',          route: 'orders',           icon: 'layui-icon-form' },
-  { label: 'Technician Queue', route: 'technician-queue', icon: 'layui-icon-list' },
-  { label: 'Finance',         route: 'finance',          icon: 'layui-icon-dollar' },
-  { label: 'Environmental',   route: 'environmental',    icon: 'layui-icon-tree' },
-  { label: 'Cleansing',       route: 'cleansing',        icon: 'layui-icon-refresh-3' },
-  { label: 'Audit Logs',      route: 'audit-logs',       icon: 'layui-icon-log' },
-];
-
-MENU_CONFIG[ROLES.FINANCE] = [
-  { label: 'Finance',     route: 'finance',      icon: 'layui-icon-dollar' },
-  { label: 'Audit Logs',  route: 'audit-logs',   icon: 'layui-icon-log' },
-];
-
-MENU_CONFIG[ROLES.ADMINISTRATOR] = [
+var MENU_ITEMS = [
   { label: 'Dashboard',        route: 'dashboard',        icon: 'layui-icon-home' },
   { label: 'Orders',           route: 'orders',           icon: 'layui-icon-form' },
   { label: 'Technician Queue', route: 'technician-queue', icon: 'layui-icon-list' },
@@ -67,27 +41,20 @@ function roleToCssClass(role) {
 }
 
 /**
- * Compute a merged, de-duplicated menu for the current user based on all
- * assigned roles. Higher-privilege roles contribute more items.
+ * Compute the menu visible to the current user. Filters MENU_ITEMS by
+ * delegating the access decision to the router's hasAccess(), so any
+ * change to a route's role allowlist automatically updates the menu
+ * with no cross-file edit needed.
  */
 function getMenuItems() {
-  var roles = store.getRoles();
-  var seen = {};
   var items = [];
-
-  for (var i = 0; i < roles.length; i++) {
-    var roleItems = MENU_CONFIG[roles[i]];
-    if (!roleItems) continue;
-
-    for (var j = 0; j < roleItems.length; j++) {
-      var item = roleItems[j];
-      if (!seen[item.route]) {
-        seen[item.route] = true;
-        items.push(item);
-      }
+  for (var i = 0; i < MENU_ITEMS.length; i++) {
+    var item = MENU_ITEMS[i];
+    var route = router.findRoute(item.route);
+    if (route && router.hasAccess(route)) {
+      items.push(item);
     }
   }
-
   return items;
 }
 
@@ -159,5 +126,5 @@ module.exports = {
   getMenuItems: getMenuItems,
   getPrimaryRoleClass: getPrimaryRoleClass,
   roleToCssClass: roleToCssClass,
-  MENU_CONFIG: MENU_CONFIG,
+  MENU_ITEMS: MENU_ITEMS,
 };
