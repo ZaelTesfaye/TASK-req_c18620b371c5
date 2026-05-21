@@ -109,7 +109,38 @@ function request(method, path, options) {
         return { data: null, status: 204 };
       }
 
-      return response.json().then(function (data) {
+      // Read the body as TEXT first, then parse. Going directly through
+      // response.json() throws a generic "Unexpected token … is not
+      // valid JSON" with no way to inspect what actually came back -
+      // and "what actually came back" is exactly what you need when
+      // diagnosing the stray-whitespace / leaked-PHP-warning class of
+      // bug that broke the login store dropdown. With the raw text in
+      // hand we can: (a) trim leading whitespace defensively (so a
+      // single rogue space prepended to a real JSON envelope doesn't
+      // 500 the login page); (b) on a real parse failure, log the
+      // first ~500 chars of the body so the actual culprit is visible
+      // in DevTools instead of opaque.
+      return response.text().then(function (rawText) {
+        var trimmed = (rawText || '').replace(/^[\s﻿\xA0]+/, '');
+        var data;
+        try {
+          data = trimmed === '' ? null : JSON.parse(trimmed);
+        } catch (parseErr) {
+          console.error(
+            '[api] ' + method.toUpperCase() + ' ' + path +
+              ' returned non-JSON body (status ' + response.status + '). ' +
+              'First 500 chars of response:\n' +
+              (rawText || '').slice(0, 500)
+          );
+          var jsonErr = new Error(
+            'Server returned non-JSON response (status ' + response.status + '). ' +
+              'See console for the raw body.'
+          );
+          jsonErr.status = response.status || 0;
+          jsonErr.errors = null;
+          throw jsonErr;
+        }
+
         if (!response.ok) {
           var err = normalizeError(response.status, data);
           var error = new Error(err.message);
@@ -122,7 +153,7 @@ function request(method, path, options) {
         var payload = (data && typeof data === 'object' && 'success' in data && 'data' in data)
           ? data.data
           : data;
-        return { data: payload, success: data.success, status: response.status };
+        return { data: payload, success: data && data.success, status: response.status };
       });
     })
     .catch(function (err) {
