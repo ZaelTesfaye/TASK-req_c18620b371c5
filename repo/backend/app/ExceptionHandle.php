@@ -46,12 +46,49 @@ class ExceptionHandle extends Handle
         } catch (\Throwable $ignored) {
         }
 
+        $status = method_exists($e, 'getStatusCode') ? (int) $e->getStatusCode() : 500;
+        if ($status < 400 || $status > 599) {
+            $status = 500;
+        }
+
+        // Differentiate HTTP-protocol errors (404/405/etc.) from genuine
+        // internal failures. Without this every HttpException came back
+        // with error_code=INTERNAL_ERROR even when the real cause was
+        // "route not found", which made the login dropdown look like
+        // a server crash instead of a routing miss.
+        $errorCode = match ($status) {
+            400 => 'BAD_REQUEST',
+            401 => 'UNAUTHORIZED',
+            403 => 'FORBIDDEN',
+            404 => 'NOT_FOUND',
+            405 => 'METHOD_NOT_ALLOWED',
+            409 => 'CONFLICT',
+            422 => 'VALIDATION_ERROR',
+            default => 'INTERNAL_ERROR',
+        };
+
+        $defaultMessage = match ($status) {
+            404 => 'Resource not found',
+            405 => 'Method not allowed',
+            default => 'An internal error occurred',
+        };
+
         $payload = [
             'success'    => false,
-            'error_code' => 'INTERNAL_ERROR',
-            'message'    => $isDebug ? $e->getMessage() : 'An internal error occurred',
+            'error_code' => $errorCode,
+            'message'    => $isDebug ? $e->getMessage() : $defaultMessage,
             'request_id' => $requestId,
         ];
+
+        // For 404s, surface the requested path so a misrouted call from
+        // the frontend (wrong prefix, missing trailing segment, etc.) is
+        // immediately diagnosable from the network panel instead of
+        // requiring server log access. Safe to expose: the URL is
+        // already known to the caller.
+        if ($status === 404 && $request) {
+            $payload['path'] = $request->pathinfo();
+            $payload['method'] = $request->method();
+        }
 
         if ($isDebug) {
             $payload['debug'] = [
@@ -59,11 +96,6 @@ class ExceptionHandle extends Handle
                 'file'      => $e->getFile(),
                 'line'      => $e->getLine(),
             ];
-        }
-
-        $status = method_exists($e, 'getStatusCode') ? (int) $e->getStatusCode() : 500;
-        if ($status < 400 || $status > 599) {
-            $status = 500;
         }
 
         return Response::create($payload, 'json', $status);
