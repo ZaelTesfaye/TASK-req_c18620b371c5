@@ -17,7 +17,14 @@ class AuditImmutabilityTest extends TestCase
     protected function setUp(): void
     {
         // Boot ThinkPHP's app kernel so the facade Db is usable.
-        if (!class_exists(\think\App::class, false) || !$GLOBALS['__audit_immut_boot'] ?? false) {
+        // Parens around the `?? false` are load-bearing: PHP binds `!`
+        // tighter than `??`, so `!$GLOBALS[$k] ?? false` evaluates
+        // `!$GLOBALS[$k]` first - which raises an
+        // "Undefined global variable" warning the moment the key
+        // doesn't yet exist, before `??` can short-circuit. With the
+        // parens the `??` consumes the missing key, then `!` negates
+        // the resulting `false`.
+        if (!class_exists(\think\App::class, false) || !($GLOBALS['__audit_immut_boot'] ?? false)) {
             $app = new \think\App();
             $app->initialize();
             $GLOBALS['__audit_immut_boot'] = true;

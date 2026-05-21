@@ -24,7 +24,15 @@ COPY . .
 # committed dev defaults without compose duplicating them. compose's
 # `env_file:` directive then layers the same values into the running
 # container; the on-disk .env is the fallback when env vars are absent.
-RUN cp .env.example .env
+#
+# Strip `#` comments via sed - PHP's parse_ini_file (used by
+# \think\Env::load and indirectly by PHPUnit's bootstrap) only
+# treats `;` as a comment marker, NOT `#`. Without this, every test
+# that exercises App::initialize() (currently LogRedactionIntegration
+# and AuditImmutability) trips on the parens inside the `#` comments
+# at the top of .env.example and PHPUnit reports the warning as an
+# error. See backend/Dockerfile for the longer rationale.
+RUN sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' .env.example > .env
 
 RUN mkdir -p storage/keys storage/logs runtime \
     && chmod -R 777 storage runtime

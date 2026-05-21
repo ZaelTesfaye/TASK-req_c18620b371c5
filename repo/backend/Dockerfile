@@ -26,7 +26,20 @@ COPY . .
 # ECS task-def secrets, etc.); the .env file here exists so a fresh
 # `docker compose up` does not require manual env wiring and so the
 # Aquila security gate does not see credentials inlined in YAML.
-RUN cp .env.example .env
+#
+# IMPORTANT: strip `#` comment lines (and blank lines) when copying.
+# `.env.example` is authored with `#` comments so docker-compose's
+# `env_file:` parser - which DOES treat `#` as a comment - can read
+# it directly on the host. But ThinkPHP loads `/app/.env` via
+# `\think\Env::load()` which calls `parse_ini_file()`, and since
+# PHP 5.3 `parse_ini_file()` only honours `;` as a comment marker,
+# NOT `#`. A `#` line that contains `(` (e.g. "(Kubernetes Secret,
+# Vault, …)") then parses as a malformed key=value pair and the
+# framework emits "syntax error, unexpected '('" on every request -
+# which surfaces in the response body as stray whitespace and breaks
+# the login store dropdown. Stripping comments before bake-in keeps
+# `/app/.env` pure KEY=VALUE so parse_ini_file is happy.
+RUN sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' .env.example > .env
 
 RUN mkdir -p storage/keys storage/logs runtime \
     && chmod -R 777 storage runtime
