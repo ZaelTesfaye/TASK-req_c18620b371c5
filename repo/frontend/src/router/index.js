@@ -53,6 +53,37 @@ var routes = [
 var _currentRoute = null;
 var _onNavigate = null;
 
+/**
+ * Pick a landing route the current user is actually allowed to view.
+ * The hard-coded redirect to `dashboard` after login gave every
+ * non-manager/admin role an immediate 403 (dashboard is restricted to
+ * store_manager + administrator). This walks the role -> page priority
+ * list in role-appropriateness order and returns the first route the
+ * user can access. Falls back to `login` for users with no recognised
+ * role (shouldn't happen, but better than an infinite 403 loop).
+ */
+function getLandingPage() {
+  if (!auth.isAuthenticated()) {
+    return 'login';
+  }
+  var userRoles = store.getRoles();
+  // Priority ladder: most specific landing page per role family.
+  var preferences = [
+    { role: ROLES.ADMINISTRATOR, page: 'dashboard' },
+    { role: ROLES.STORE_MANAGER, page: 'dashboard' },
+    { role: ROLES.FINANCE,       page: 'finance' },
+    { role: ROLES.TECHNICIAN,    page: 'technician-queue' },
+    { role: ROLES.FRONT_DESK,    page: 'orders' },
+    { role: ROLES.CUSTOMER,      page: 'kiosk' },
+  ];
+  for (var i = 0; i < preferences.length; i++) {
+    if (userRoles.indexOf(preferences[i].role) !== -1) {
+      return preferences[i].page;
+    }
+  }
+  return 'login';
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -114,11 +145,12 @@ function hasAccess(route) {
 function render403() {
   var app = document.getElementById('app');
   if (app) {
+    var landing = getLandingPage();
     app.innerHTML =
       '<div style="text-align:center;padding:80px 20px;">' +
       '<h1>403 - Access Denied</h1>' +
       '<p>You do not have permission to view this page.</p>' +
-      '<a href="#/dashboard">Return to Dashboard</a>' +
+      '<a href="#/' + landing + '">Return to your workspace</a>' +
       '</div>';
   }
 }
@@ -126,11 +158,12 @@ function render403() {
 function render404() {
   var app = document.getElementById('app');
   if (app) {
+    var landing = getLandingPage();
     app.innerHTML =
       '<div style="text-align:center;padding:80px 20px;">' +
       '<h1>404 - Page Not Found</h1>' +
       '<p>The page you requested could not be found.</p>' +
-      '<a href="#/dashboard">Return to Dashboard</a>' +
+      '<a href="#/' + landing + '">Return to your workspace</a>' +
       '</div>';
   }
 }
@@ -154,7 +187,7 @@ function handleRouteChange() {
 
   // Default redirect
   if (!path) {
-    navigate(auth.isAuthenticated() ? 'dashboard' : 'login');
+    navigate(auth.isAuthenticated() ? getLandingPage() : 'login');
     return;
   }
 
@@ -172,9 +205,11 @@ function handleRouteChange() {
     return;
   }
 
-  // Already logged in users visiting login page -> redirect to dashboard
+  // Already logged in users visiting login page -> redirect to their
+  // role-appropriate landing page (NOT hard-coded dashboard, which only
+  // managers/admins can view).
   if (path === 'login' && auth.isAuthenticated()) {
-    navigate('dashboard');
+    navigate(getLandingPage());
     return;
   }
 
@@ -232,6 +267,7 @@ module.exports = {
   getRoutes: getRoutes,
   findRoute: findRoute,
   hasAccess: hasAccess,
+  getLandingPage: getLandingPage,
   ROLES: ROLES,
   ROLE_LABELS: ROLE_LABELS,
   ALL_ROLES: ALL_ROLES,

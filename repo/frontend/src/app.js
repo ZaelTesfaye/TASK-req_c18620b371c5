@@ -29,9 +29,14 @@ function renderShell() {
   var app = document.getElementById('app');
   if (!app) return;
 
+  // Brand link points at the current user's role-appropriate landing
+  // page rather than a fixed dashboard URL, so clicking the title from
+  // e.g. a technician's queue doesn't 403 them through the
+  // store_manager-only dashboard route.
+  var landing = router.getLandingPage();
   app.innerHTML =
     '<div class="fieldops-header">' +
-      '<a href="#/dashboard" class="brand">FieldOps Service Suite</a>' +
+      '<a href="#/' + landing + '" class="brand">FieldOps Service Suite</a>' +
       '<div id="header-user"></div>' +
     '</div>' +
     '<div class="fieldops-body">' +
@@ -114,7 +119,7 @@ function renderLoginPage() {
         fd.get('workstationId')
       )
       .then(function () {
-        router.navigate('dashboard');
+        router.navigate(router.getLandingPage());
       })
       .catch(function (err) {
         if (errorEl) {

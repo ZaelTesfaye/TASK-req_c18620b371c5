@@ -96,6 +96,28 @@
   background: #393d49;
   min-height: calc(100vh - 60px);
   overflow-y: auto;
+  /* Lay out children as a vertical column so the role-tinted nav
+     wrapper can flex to fill the entire sidebar height. Without this,
+     the inner .layui-nav only spanned its menu items and the
+     fallback grey from this element showed below the last button. */
+  display: flex;
+  flex-direction: column;
+}
+
+/* The role-tinted wrapper div (rendered by Navigation.js as
+   <div class="menu-role-*">...) carries the dark accent color via
+   `.menu-role-* .layui-nav` below. Stretch it to fill the sidebar so
+   the accent reaches the bottom edge instead of stopping at the last
+   menu item. The Layui nav inside also stretches via `flex: 1` so
+   hover/active states still cover the full strip. */
+.fieldops-sidebar > div[class^="menu-role-"] {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.fieldops-sidebar > div[class^="menu-role-"] > .layui-nav {
+  flex: 1;
 }
 
 .fieldops-content {
@@ -147,26 +169,37 @@
    Role-based Menu Colors
    --------------------------------------------------------------------------- */
 
+/* Apply the role-tinted background to BOTH the wrapper div and the
+   layui-nav inside it. The wrapper fills the sidebar via the flex
+   rules above; the nav inherits the same color so any internal
+   margins/padding from Layui's stylesheet don't reveal the sidebar's
+   fallback grey. */
+.menu-role-customer,
 .menu-role-customer .layui-nav {
   background: #3b5998;
 }
 
+.menu-role-frontdesk,
 .menu-role-frontdesk .layui-nav {
   background: #2f4056;
 }
 
+.menu-role-technician,
 .menu-role-technician .layui-nav {
   background: #005b4f;
 }
 
+.menu-role-storemanager,
 .menu-role-storemanager .layui-nav {
   background: #5b3256;
 }
 
+.menu-role-finance,
 .menu-role-finance .layui-nav {
   background: #4a5568;
 }
 
+.menu-role-administrator,
 .menu-role-administrator .layui-nav {
   background: #1a202c;
 }

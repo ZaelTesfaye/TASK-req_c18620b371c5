@@ -1,6 +1,30 @@
 var api = require('../services/api');
 var auth = require('../services/auth');
 var store = require('../store/index');
+var router = require('../router/index');
+
+/**
+ * Predefined demo accounts shipped by backend/database/seeds/seed.sql.
+ * Rendered as a dropdown because the app is a workstation console with
+ * a closed user set (no self-registration), so free-form typing only
+ * invites typos. The label shows role + bound store/workstation so the
+ * operator picks a row that actually matches the Store/Workstation
+ * dropdowns below — otherwise the backend returns INVALID_BINDING.
+ *
+ * Keep in sync with seed.sql user/binding rows. If a real user-mgmt
+ * flow is added later, swap this list for a /auth/bootstrap/users
+ * endpoint (currently intentionally not exposed for security).
+ */
+var DEMO_USERS = [
+  { username: 'admin',      label: 'admin (Administrator) - Store 1 / WS 1' },
+  { username: 'frontdesk1', label: 'frontdesk1 (Front Desk) - Store 1 / WS 1' },
+  { username: 'tech1',      label: 'tech1 (Technician) - Store 1 / WS 2' },
+  { username: 'manager1',   label: 'manager1 (Store Manager) - Store 1 / WS 1' },
+  { username: 'finance1',   label: 'finance1 (Finance) - Store 1 / WS 1' },
+  { username: 'customer1',  label: 'customer1 (Customer) - Store 1 / WS 3 (Kiosk)' },
+  { username: 'tech2',      label: 'tech2 (Technician) - Store 2 / WS 5' },
+  { username: 'frontdesk2', label: 'frontdesk2 (Front Desk) - Store 2 / WS 4' },
+];
 
 /**
  * Login page with workspace selector.
@@ -92,7 +116,13 @@ function render(container) {
         '<div class="layui-form-item">' +
           '<label class="layui-form-label">Username</label>' +
           '<div class="layui-input-block">' +
-            '<input type="text" name="username" id="login-username" class="layui-input" placeholder="Enter username" required autocomplete="username">' +
+            (function () {
+              var opts = '<option value="">-- Select User --</option>';
+              for (var i = 0; i < DEMO_USERS.length; i++) {
+                opts += '<option value="' + DEMO_USERS[i].username + '">' + DEMO_USERS[i].label + '</option>';
+              }
+              return '<select name="username" id="login-username" lay-verify="required">' + opts + '</select>';
+            })() +
           '</div>' +
         '</div>' +
         '<div class="layui-form-item">' +
@@ -172,9 +202,14 @@ function render(container) {
         .then(function () {
           setButtonState(submitBtn, null);
           submitBtn.textContent = 'Sign In';
-          // Navigate to dashboard
-          if (window.location.hash !== '#/dashboard') {
-            window.location.hash = '#/dashboard';
+          // Send the user to whichever page their role is actually
+          // allowed to view. Hard-coding dashboard sent every
+          // non-manager/admin role straight into a 403 because the
+          // dashboard route is restricted to store_manager +
+          // administrator.
+          var landing = '#/' + router.getLandingPage();
+          if (window.location.hash !== landing) {
+            window.location.hash = landing;
           }
         })
         .catch(function (err) {
